@@ -11,6 +11,7 @@
 
 
 import time 
+import argparse
 
 import nidaqmx
 
@@ -42,7 +43,9 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
             timeout = -1
         time_start = time.time()
         time_elapsed = time.time() - time_start
-        while(time_elapsed < timeout and timeout > 0 and HEXSTATUS = 'scanning'):
+        curr_voltage = task.read()
+        print('Current voltage: ' + str(curr_voltage))
+        while(time_elapsed < timeout and timeout > 0 and HEXSTATUS == 'scanning'):
             voltage_btw_plate_cavity = task.read()
             if(voltage_btw_plate_cavity < danger_volts):
                 touching = True
@@ -51,4 +54,24 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
             time_elapsed = time.time()-time_start
 
     return touching
-        
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
+                    help='IP address to connect to the NewportXPS hexapod')
+    parser.add_argument('-j', '--pos_ip', default='192.168.0.254',
+                    help='IP address to connect to the NewportXPS positioner')
+    parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
+    parser.add_argument('-q', '--pos_password', help='Password to connect to the NewportXPS positioner' )
+    parser.add_argument('-r', '--reinitialize', action='store_true', 
+                        help='Whether to reinitialize the xps machines')
+    args = parser.parse_args()
+    
+    print('****************************')
+    password = args.pos_password
+    IP = args.pos_ip
+
+    safety_check()
+
+if __name__ == '__main__':
+    main()
