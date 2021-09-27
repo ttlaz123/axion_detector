@@ -1,4 +1,4 @@
-
+import os
 import pyvisa as pv 
 import matplotlib.pyplot as plt
 import time
@@ -71,7 +71,7 @@ def send_command(na, cmd_list):
     return res 
     
 
-def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner', fig=None, ax=None):
+def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner', folder='spectra', fig=None, ax=None):
     if(ax is None):
         fig, ax = plt.subplots(1,1)
     ax.plot(xs, ys, label='Positioner at ' + str(position) + ' mm', linewidth=3)
@@ -83,7 +83,7 @@ def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner
     ax.set_title(title)
     ax.legend()
     time0 = time.time()
-    fig.savefig(str(time0)+'.png')
+    fig.savefig(os.path.join(folder, str(time0)+'.png'))
     return fig, ax
 
 def print_trace(na, position=None, fig=None, ax=None):
@@ -98,7 +98,7 @@ def print_trace(na, position=None, fig=None, ax=None):
 
     coefficients = fit_skewedLorentzian(freqs,response)
     print(coefficients)
-    fig, ax = plot_trace(freqs, response, position,fit=coefficients,fig=fig, ax=ax)
+    fig, ax = plot_trace(freqs, response, position,fit=coefficients)#,fig=fig, ax=ax)
     return fig, ax 
 
 def initialize_device():
