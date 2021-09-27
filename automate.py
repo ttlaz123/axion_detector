@@ -12,6 +12,8 @@
 
 import time 
 import argparse
+import numpy as np
+import matplotlib.pyplot as plt
 
 import nidaqmx
 import winsound
@@ -21,16 +23,17 @@ import na_tracer
 
 HEXSTATUS='scanning'
 
-def tuning_scan(hex, tuning_sequence):
+def tuning_scan(hex, na, tuning_sequence, delay=15):
     '''
     hex: HexaChamber object
     tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
     '''
 
     for i,step in enumerate(tuning_sequence):
+        time.sleep(delay)
         response = na_tracer.get_response(na)
         if i == 0:
-            responses = np.zeros((len(tuning_sequence), len(response))
+            responses = np.zeros((len(tuning_sequence), len(response)))
         responses[i] = response
         hex.incremental_move(**step)
 
@@ -77,7 +80,7 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
 
     return touching
 
-def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=1):
+def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=0.1):
     '''
     Generates the list of coordinates to move the hexapod 
     TODO: comment more
@@ -87,6 +90,11 @@ def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=1):
     seq.insert(0, {coord:start})
     seq.append({coord:-end})
     return seq
+
+def plot_tuning(responses):
+
+    plt.imshow(responses, interpolation='none', aspect='auto')
+    plt.show()
 
 def main():
     parser = argparse.ArgumentParser()
@@ -104,10 +112,14 @@ def main():
     password = args.pos_password
     IP = args.pos_ip
 
-    hex = HexChamber.init()
+    hex = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
     na = na_tracer.initialize_device()
 
     safety_check()
+
+    seq = generate_single_axis_seq(incr=0.02, start=-0.05, end=0.05)
+    responses = tuning_scan(hex, na, seq)
+    plot_tuning(responses)
 
 if __name__ == '__main__':
     main()
