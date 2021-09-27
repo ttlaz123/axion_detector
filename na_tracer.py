@@ -101,6 +101,33 @@ def print_trace(na, position=None, fig=None, ax=None):
     fig, ax = plot_trace(freqs, response, position,fit=coefficients)#,fig=fig, ax=ax)
     return fig, ax 
 
+def save_trace(na, fname="test_spec"):
+    trace_format = 'FORM4'
+    write_cmd = 'OUTPFORM'
+    str_res = send_command(na, [trace_format, write_cmd])
+    response = format_trace4(str_res)
+
+    lim_cmd = 'OUTPLIML'
+    str_res = send_command(na, [lim_cmd])
+    freqs = format_trace4(str_res)
+
+    np.save(fname, (freqs,response))
+
+def get_freqs(na):
+    lim_cmd = 'OUTPLIML'
+    str_res = send_command(na, [lim_cmd])
+    freqs = format_trace4(str_res)
+
+    return freqs
+
+def get_response(na):
+    trace_format = 'FORM4'
+    write_cmd = 'OUTPFORM'
+    str_res = send_command(na, [trace_format, write_cmd])
+    response = format_trace4(str_res)
+
+    return response
+
 def initialize_device():
     rm = pv.ResourceManager()
     resources = rm.list_resources()

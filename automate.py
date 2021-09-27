@@ -15,7 +15,25 @@ import argparse
 
 import nidaqmx
 
+from hexachamber import HexaChamber
+import na_tracer
+
 HEXSTATUS='scanning'
+
+def tuning_scan(hex, tuning_sequence):
+    '''
+    hex: HexaChamber object
+    tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
+    '''
+
+    for i,step in enumerate(tuning_sequence):
+        response = na_tracer.get_response(na)
+        if i == 0:
+            responses = np.zeros((len(tuning_sequence), len(response))
+        responses[i] = response
+        hex.incremental_move(**step)
+
+    return responses    
 
 def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
     '''
@@ -55,6 +73,8 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
 
     return touching
 
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
@@ -70,6 +90,9 @@ def main():
     print('****************************')
     password = args.pos_password
     IP = args.pos_ip
+
+    hex = HexChamber.init()
+    na = na_tracer.initialize_device()
 
     safety_check()
 
