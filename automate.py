@@ -61,6 +61,10 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
     return touching
 
 def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=1):
+    '''
+    Generates the list of coordinates to move the hexapod 
+    TODO: comment more
+    '''
     num_moves = int((end-start)/incr)
     seq = [{coord:incr} for i in range(num_moves)]
     seq.insert(0, {coord:start})
