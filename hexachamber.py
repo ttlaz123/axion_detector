@@ -23,6 +23,8 @@ import msvcrt
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+import na_tracer
+
 print(" Current directory: " + str(os.getcwd()))
 # import System
 # from System import String
@@ -38,11 +40,13 @@ sys.path.append(r'../alicptfts/alicptfts')
 from mynewportxps.newportxps.XPS_C8_drivers import XPS, XPSException
 from mynewportxps.newportxps.ftp_wrapper import SFTPWrapper, FTPWrapper
 from mynewportxps.newportxps import NewportXPS
+from alicptfts.alicptfts import AlicptFTS
 
 ## TODO put this in some sort of enum or something
 CHANGE_VERBOSE = 'z'
 CHANGE_DEBUG = 'x'
 EXIT = 'q'
+PRINT = 'p'
 CHANGE_HEX_INCREMENT = 'c'
 CHANGE_POS_INCREMENT = 'b'
 CHANGE_POS_VELOCITY = 'v'
@@ -132,6 +136,17 @@ class Positioner:
             print('XPS positioner not connected')
         return default_velocity
     
+    def get_position(self):
+        '''
+        gets position of positioner
+        '''
+        cmd = 'GroupPositionCurrentGet(Group1,double *)'
+        try:
+            pos = self.newportxps.get_stage_position(self.stage_name)
+        except AttributeError:
+            print('XPS positioner not connected')
+        return pos
+
     def set_incr(self, incr):
         '''
         sets increment of the positioner
@@ -227,7 +242,7 @@ class HexaChamber:
 
     def __init__(self, host, 
                  username='Administrator', password='xxxxxx', groupname='HEXAPOD',
-                 port=5001, timeout=10, extra_triggers=0, xps=None, default_velocity=1):
+                 port=5001, timeout=10, extra_triggers=0, xps=None, default_velocity=0.1):
 
         """Establish connection with each part.
         
@@ -568,7 +583,8 @@ def move_xps_machines(hex, pos):
     pressed_key = '0'
     hex_thread = threading.Thread(target=move_hex_manual, args=[ hex, pressed_key])
     pos_thread = threading.Thread(target=move_pos_manual, args=[ pos, pressed_key])
-
+    na = na_tracer.initialize_device()
+    fig, ax = plt.subplots(1,1)
     verbose = True
     debug = False
 
@@ -586,6 +602,12 @@ def move_xps_machines(hex, pos):
         elif(pressed_key == HELP):
             generate_instructions()
             continue 
+        elif(pressed_key == PRINT):
+            position = pos.get_position()
+            print('Printing Trace')
+            fig, ax = na_tracer.print_trace(na, position, fig=fig, ax=ax)
+           
+            print('Trace saved')
 
         elif(pressed_key == CHANGE_DEBUG):
             debug = not debug
@@ -633,9 +655,9 @@ def move_xps_machines(hex, pos):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--hex_ip', default='192.168.0.254',
+    parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
                     help='IP address to connect to the NewportXPS hexapod')
-    parser.add_argument('-j', '--pos_ip', default='192.168.254.254',
+    parser.add_argument('-j', '--pos_ip', default='192.168.0.254',
                     help='IP address to connect to the NewportXPS positioner')
     parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
     parser.add_argument('-q', '--pos_password', help='Password to connect to the NewportXPS positioner' )
