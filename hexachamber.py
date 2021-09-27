@@ -38,7 +38,6 @@ sys.path.append(r'../alicptfts/alicptfts')
 from mynewportxps.newportxps.XPS_C8_drivers import XPS, XPSException
 from mynewportxps.newportxps.ftp_wrapper import SFTPWrapper, FTPWrapper
 from mynewportxps.newportxps import NewportXPS
-from alicptfts.alicptfts import AlicptFTS
 
 ## TODO put this in some sort of enum or something
 CHANGE_VERBOSE = 'z'
