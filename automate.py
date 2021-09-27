@@ -14,8 +14,10 @@ import time
 import argparse
 
 import nidaqmx
+import winsound
 
 HEXSTATUS='scanning'
+
 
 def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
     '''
@@ -33,7 +35,8 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
     
     '''
     
-    
+    frequency = 2500  # Set Frequency To 2500 Hertz
+    duration = 1000  # Set Duration To 1000 ms == 1 second
     taskname = 'Dev' + str(task_number)
     voltage_channel = '/'.join([taskname, channel])
     touching = False
@@ -50,10 +53,19 @@ def safety_check(danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
             if(voltage_btw_plate_cavity < danger_volts):
                 touching = True
                 print("Plate and cavity are touching!")
+                
+                winsound.Beep(frequency, duration)
                 break 
             time_elapsed = time.time()-time_start
 
     return touching
+
+def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=1):
+    num_moves = int((end-start)/incr)
+    seq = [{coord:incr} for i in range(num_moves)]
+    seq.insert(0, {coord:start})
+    seq.append({coord:-end})
+    return seq
 
 def main():
     parser = argparse.ArgumentParser()
