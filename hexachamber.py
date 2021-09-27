@@ -38,7 +38,6 @@ sys.path.append(r'../alicptfts/alicptfts')
 from mynewportxps.newportxps.XPS_C8_drivers import XPS, XPSException
 from mynewportxps.newportxps.ftp_wrapper import SFTPWrapper, FTPWrapper
 from mynewportxps.newportxps import NewportXPS
-from alicptfts.alicptfts import AlicptFTS
 
 ## TODO put this in some sort of enum or something
 CHANGE_VERBOSE = 'z'
@@ -634,9 +633,9 @@ def move_xps_machines(hex, pos):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--hex_ip', default='192.168.0.254',
+    parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
                     help='IP address to connect to the NewportXPS hexapod')
-    parser.add_argument('-j', '--pos_ip', default='192.168.254.254',
+    parser.add_argument('-j', '--pos_ip', default='192.168.0.254',
                     help='IP address to connect to the NewportXPS positioner')
     parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
     parser.add_argument('-q', '--pos_password', help='Password to connect to the NewportXPS positioner' )
