@@ -156,6 +156,7 @@ def move_xps_machines(hex, pos):
             print('~~~~ Verbose setting: ' + str(verbose) + ' ~~~~')
             continue
         elif(pressed_key == CHANGE_HEX_INCREMENT):
+            print('Current increment: ' + str(hex.velocity))
             print('Enter hexapod default velocity (' + str(HexaChamber.MIN_VEL) + ' to ' +
                     str(HexaChamber.MAX_VEL) + '), then press enter: ')
             x = input()

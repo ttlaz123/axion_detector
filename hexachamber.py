@@ -139,6 +139,12 @@ class HexaChamber:
             if 'XPS-C' in self.firmware_version:
                 self.ftphome = '/Admin'
         return self.sid
+    
+    def abort_all(self):
+        command_name = 'GroupMoveAbort'
+        cmd = command_name + '(HEXAPOD)'
+        err, msg = self.xps.Send(socketId = self.sid, cmd=cmd)
+        return err, msg
 
     def recenter_hexapod(self, GroupName=None, CoordinateSystem=None, 
                             X=0, Y=0, Z=0, U=0, V=0, W=0):
