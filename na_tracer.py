@@ -129,6 +129,23 @@ def get_response(na):
 
     return response
 
+def get_pna_freq(na):
+    str_res = send_command(na, ["SENS:FREQ:STAR?;STOP?"])
+    freqs = np.array(str_res.split(';'), dtype=float)
+    start = freqs[0]
+    end = freqs[1]
+
+    str_res = send_command(na, ["SENSe1:SWEep:POIN?"])
+    num_points = int(str_res)
+
+    freqs = np.linspace(start, end, num_points)
+    
+    return freqs
+
+def get_pna_response(na):
+    str_res = send_command(na, ["CALC:DATA? FDATA"])
+    return np.array(str_res.split(','), dtype=float)
+
 def initialize_device():
     rm = pv.ResourceManager()
     resources = rm.list_resources()
@@ -141,8 +158,10 @@ def initialize_device():
 def main():
     
     device = initialize_device()
-    fig, ax = print_trace(device)
-    fig.show()
+    #fig, ax = print_trace(device)
+    #fig.show()
+
+    print(send_command(device, ["SENS:FREQ:STAR?;STOP?"]))
     return 
 
 if __name__ == '__main__':

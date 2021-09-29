@@ -79,7 +79,7 @@ class AutoScanner():
     
 
 
-    def tuning_scan_safety(self, tuning_sequence, delay=15):
+    def tuning_scan_safety(self, tuning_sequence, delay=0.5):
         '''
         '''
         danger_volts = 0.4
@@ -92,6 +92,8 @@ class AutoScanner():
         self.hexstatus = 'scanning'
         safety_thread.start()
         responses = None
+
+        freqs = na_tracer.get_pna_freq(self.na)
         for i,step in enumerate(tuning_sequence):
             
             if(self.hexstatus == 'stop'):
@@ -100,7 +102,7 @@ class AutoScanner():
             if(self.hexstatus == 'stop'):
                 break
             ## TODO refactor na_tracer so this monstrosity doesn't happen
-            response = na_tracer.get_response(self.na)
+            response = na_tracer.get_pna_response(self.na)
             if i == 0:
                 responses = np.zeros((len(tuning_sequence), len(response)))
             responses[i] = response
@@ -108,8 +110,8 @@ class AutoScanner():
                 break
             print('Performing move: ' + str(step))
             self.hex.incremental_move(**step)
-
-        return responses   
+        self.hexstatus = 'stop'
+        return responses, freqs
 
 def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=0.1):
     '''
@@ -131,7 +133,7 @@ def tuning_scan(hex, na, tuning_sequence, delay=15):
     print('Starting scan...')
     for i,step in enumerate(tuning_sequence):
         time.sleep(delay)
-        response = na_tracer.get_response(na)
+        response = na_tracer.get_pna_response(na)
         if i == 0:
             responses = np.zeros((len(tuning_sequence), len(response)))
         responses[i] = response
@@ -139,10 +141,14 @@ def tuning_scan(hex, na, tuning_sequence, delay=15):
 
     return responses    
 
-def plot_tuning(responses):
+def plot_tuning(responses,freqs, coord, start, end):
 
-    plt.imshow(responses, interpolation='none', aspect='auto')
+    freqs = freqs/10**9 # GHz
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], end, start], interpolation='none', aspect='auto', cmap='plasma_r')
+    pt.xlabel('Frequency [GHz]')
+    plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.show()
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -164,13 +170,17 @@ def main():
     na = na_tracer.initialize_device()
 
     auto = AutoScanner(hex, None, na)
-    #safety_check()
 
-    seq = generate_single_axis_seq(incr=0.02, start=-0.1, end=0.1)
-    responses = auto.tuning_scan_safety(seq)
+    coord='dX'
+    start=-0.6
+    end=0.6
+    incr=0.005
+
+    seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
+    responses, freqs = auto.tuning_scan_safety(seq)
     if(responses is not None):
         np.save('test_responses', responses)
-        plot_tuning(responses)
+        plot_tuning(responses, freqs, coord, start, end)
 
     hex.close()
 
