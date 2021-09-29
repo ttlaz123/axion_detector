@@ -116,7 +116,7 @@ def main():
     na = na_tracer.initialize_device()
 
     safety_check()
-
+    
     seq = generate_single_axis_seq(incr=0.02, start=-0.05, end=0.05)
     responses = tuning_scan(hex, na, seq)
     plot_tuning(responses)
