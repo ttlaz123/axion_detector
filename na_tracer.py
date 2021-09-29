@@ -60,7 +60,8 @@ def format_trace4(string_result):
         try: 
             floats.append(float(p))
         except ValueError:
-            print('Not a float: ' + str(p))
+            #print('Not a float: ' + str(p))
+            pass
     return floats
 
 def send_command(na, cmd_list):
@@ -131,9 +132,11 @@ def get_response(na):
 def initialize_device():
     rm = pv.ResourceManager()
     resources = rm.list_resources()
+    print('Available resources: ' + str(resources))
     na_name = resources[0]
     device = rm.open_resource(na_name)
     return device 
+
 
 def main():
     
