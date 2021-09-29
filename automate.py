@@ -32,7 +32,7 @@ class AutoScanner():
 
 
 
-    def safety_check(self, danger_volts=0.4, channel='ai0', task_number=1, timeout=30):
+    def safety_check(self, danger_volts=0.1, channel='ai0', task_number=1, timeout=30):
         '''
         Continually measures the potential difference between the cavity
             and the plate. If the potential difference drops below the critical
@@ -82,7 +82,7 @@ class AutoScanner():
     def tuning_scan_safety(self, tuning_sequence, delay=0.5):
         '''
         '''
-        danger_volts = 0.4
+        danger_volts = 0.1
         channel = 'ai0'
         taskno = 1
         timeout = None
@@ -154,10 +154,11 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     plt.show()
 
 def save_tuning(responses, freqs, start_pos, coord, start, end):
-    start_pos = np.round(start_pos,4)
+    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
     now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    fname = f"{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}Wi{start}f{end}{coord}"
-    np.save(fname, np.vstack((freqs,responses)))
+    fname = f"{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}W{start}i{end}f{coord}"
+    print(f"Saving to: {data_dir}\\{fname}.npy")
+    np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -194,9 +195,9 @@ def main():
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
     responses, freqs = auto.tuning_scan_safety(seq)
     if(responses is not None):
-        np.save('test_responses', responses)
-        plot_tuning(responses, freqs, start_pos, coord, start, end)
         save_tuning(responses, freqs, start_pos, coord, start, end)
+        plot_tuning(responses, freqs, start_pos, coord, start, end)
+        
 
     hex.close()
 
