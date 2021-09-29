@@ -10,7 +10,7 @@
 # make plot
 
 
-import time 
+import time, datetime
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
@@ -65,7 +65,7 @@ class AutoScanner():
                 voltage_btw_plate_cavity = task.read()
                 if(voltage_btw_plate_cavity < danger_volts):
                     touching = True
-                    print("Plate and cavity are touching!")
+                    print("Plate and cavity are touching! (or the power supply is off...)")
                     self.hexstatus = 'stop'
                     err, msg = self.hex.abort_all()
                     print(err)
@@ -141,17 +141,23 @@ def tuning_scan(hex, na, tuning_sequence, delay=15):
 
     return responses    
 
-def plot_tuning(responses,freqs, coord, start, end):
+def plot_tuning(responses,freqs, start_pos, coord, start, end):
+
+    coords = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
+    init_param = start_pos[np.where(coords==coord)][0]
 
     freqs = freqs/10**9 # GHz
-    plt.imshow(responses, extent=[freqs[0], freqs[-1], end, start], interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r')
     plt.xlabel('Frequency [GHz]')
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
+    plt.colorbar()
     plt.show()
 
-def save_tuning(responses):
-    pass
-
+def save_tuning(responses, freqs, start_pos, coord, start, end):
+    start_pos = np.round(start_pos,4)
+    now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    fname = f"{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}Wi{start}f{end}{coord}"
+    np.save(fname, np.vstack((freqs,responses)))
 
 def main():
     parser = argparse.ArgumentParser()
@@ -175,15 +181,22 @@ def main():
     auto = AutoScanner(hex, None, na)
 
     coord='dX'
-    start=-0.6
-    end=0.6
+    start=-0.01
+    end=0.01
     incr=0.005
+
+    err,start_pos = hex.get_position()
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        hex.close()
+        exit()
 
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
     responses, freqs = auto.tuning_scan_safety(seq)
     if(responses is not None):
         np.save('test_responses', responses)
-        plot_tuning(responses, freqs, coord, start, end)
+        plot_tuning(responses, freqs, start_pos, coord, start, end)
+        save_tuning(responses, freqs, start_pos, coord, start, end)
 
     hex.close()
 

@@ -146,6 +146,20 @@ class HexaChamber:
         err, msg = self.xps.Send(socketId = self.sid, cmd=cmd)
         return err, msg
 
+    def get_position(self):
+        '''
+        get position of the hexapod tool platform in the work coordinates
+        '''
+
+        GroupName = self.groupname
+        params = ','.join([GroupName, *['double *']*6])
+        command_name = 'HexapodPositionCurrentGet'
+        cmd = command_name + '(' + params + ')'
+
+        err,msg = self.xps.Send(socketId=self.sid, cmd=cmd)
+        position = np.array(msg.split(','), dtype=float)
+        return err, position
+
     def recenter_hexapod(self, GroupName=None, CoordinateSystem=None, 
                             X=0, Y=0, Z=0, U=0, V=0, W=0):
         '''

@@ -139,8 +139,9 @@ def get_pna_freq(na):
     num_points = int(str_res)
 
     freqs = np.linspace(start, end, num_points)
-    
+
     return freqs
+
 
 def get_pna_response(na):
     str_res = send_command(na, ["CALC:DATA? FDATA"])
