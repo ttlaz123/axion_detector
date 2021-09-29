@@ -145,9 +145,12 @@ def plot_tuning(responses,freqs, coord, start, end):
 
     freqs = freqs/10**9 # GHz
     plt.imshow(responses, extent=[freqs[0], freqs[-1], end, start], interpolation='none', aspect='auto', cmap='plasma_r')
-    pt.xlabel('Frequency [GHz]')
+    plt.xlabel('Frequency [GHz]')
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.show()
+
+def save_tuning(responses):
+    pass
 
 
 def main():
