@@ -133,3 +133,5 @@ dmypy.json
 .pyre/
 test_responses.npy
 tuning_data/-0.5479X1.2093Y-0.0184Z0.0099U0.6131V0.6094Wi-0.01f0.01dX.npy
+tuning_data/-0.5479X1.2093Y-0.0184Z0.0099U0.6131V0.6094W-0.01i0.01fdX.npy
+*.npy
