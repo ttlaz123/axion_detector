@@ -79,7 +79,7 @@ class AutoScanner():
     
 
 
-    def tuning_scan_safety(self, tuning_sequence, delay=0.5):
+    def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False):
         '''
         '''
         danger_volts = 0.1
@@ -90,30 +90,48 @@ class AutoScanner():
                                     args=[danger_volts, channel, taskno, timeout])
         print('Starting scan...')
         self.hexstatus = 'scanning'
-        safety_thread.start()
+        if(safe_check):
+            safety_thread.start()
         responses = None
 
-        freqs = na_tracer.get_pna_freq(self.na)
+        freqs = self.na.get_pna_freq()
         for i,step in enumerate(tuning_sequence):
             
+            print(f'Performing move: {step} ({i+1} of {len(tuning_sequence)})')
+            self.hex.incremental_move(**step)
+
             if(self.hexstatus == 'stop'):
                 break
             time.sleep(delay)
             if(self.hexstatus == 'stop'):
                 break
             ## TODO refactor na_tracer so this monstrosity doesn't happen
-            response = na_tracer.get_pna_response(self.na)
+            
+            total_retries = 10
+            for attempt in range(total_retries):
+
+                response = self.na.get_pna_response()
+                if(response is None):
+                    # TODO: implement retrys
+                    #attempt=0
+                    #print(f'The VNA has fallen asleep, trying again (attempt {attempt})')
+                    print(f'VNA asleep!, trying again (attempt {attempt+1}/{total_retries})')
+                    continue
+                else:
+                    break
+
             if i == 0:
-                responses = np.zeros((len(tuning_sequence), len(response)))
+                responses = np.zeros((len(tuning_sequence)-1, len(response)))
+            if i == len(tuning_sequence)-1:
+                # don't take data after re-centering move
+                continue
             responses[i] = response
             if(self.hexstatus == 'stop'):
                 break
-            print('Performing move: ' + str(step))
-            self.hex.incremental_move(**step)
         self.hexstatus = 'stop'
         return responses, freqs
 
-def generate_single_axis_seq(coord='dX', incr=0.01, start=0, end=0.1):
+def generate_single_axis_seq(coord, incr, start, end):
     '''
     Generates the list of coordinates to move the hexapod 
     TODO: comment more
@@ -133,7 +151,7 @@ def tuning_scan(hex, na, tuning_sequence, delay=15):
     print('Starting scan...')
     for i,step in enumerate(tuning_sequence):
         time.sleep(delay)
-        response = na_tracer.get_pna_response(na)
+        response = na.get_pna_response()
         if i == 0:
             responses = np.zeros((len(tuning_sequence), len(response)))
         responses[i] = response
@@ -151,12 +169,11 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     plt.xlabel('Frequency [GHz]')
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.colorbar()
-    plt.show()
 
 def save_tuning(responses, freqs, start_pos, coord, start, end):
     data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
     now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    fname = f"{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}W{start}i{end}f{coord}"
+    fname = f"{now_str}_{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}W{start}i{end}f{coord}"
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
@@ -177,27 +194,33 @@ def main():
     IP = args.pos_ip
 
     hex = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
-    na = na_tracer.initialize_device()
+    na = na_tracer.NetworkAnalyzer()
 
     auto = AutoScanner(hex, None, na)
 
-    coord='dX'
-    start=-0.01
-    end=0.01
-    incr=0.005
+    coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
+    starts = np.array([-0.5, -0.5, -0.15, -0.2, -0.5])
+    ends = -1*starts
+    incrs = 0.005*np.array([1, 1, 0.1, 0.1, 1])
 
     err,start_pos = hex.get_position()
+
+    print(f"hexapod started at {start_pos}")
+
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
         hex.close()
         exit()
 
-    seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
-    responses, freqs = auto.tuning_scan_safety(seq)
-    if(responses is not None):
-        save_tuning(responses, freqs, start_pos, coord, start, end)
-        plot_tuning(responses, freqs, start_pos, coord, start, end)
-        
+    for i in range(len(coords)):
+        seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
+        responses, freqs = auto.tuning_scan_safety(seq)
+        if(responses is not None):
+            save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+            plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+            plt.figure()
+    
+    plt.show()
 
     hex.close()
 

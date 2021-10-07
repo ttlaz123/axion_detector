@@ -121,7 +121,7 @@ def move_xps_machines(hex, pos):
     pressed_key = '0'
     hex_thread = threading.Thread(target=move_hex_manual, args=[ hex, pressed_key])
     pos_thread = threading.Thread(target=move_pos_manual, args=[ pos, pressed_key])
-    na = na_tracer.initialize_device()
+    na = na_tracer.NetworkAnalyzer()
     fig, ax = plt.subplots(1,1)
     verbose = True
     debug = False
@@ -143,8 +143,7 @@ def move_xps_machines(hex, pos):
         elif(pressed_key == PRINT):
             position = pos.get_position()
             print('Printing Trace')
-            fig, ax = na_tracer.print_trace(na, position, fig=fig, ax=ax)
-           
+            fig, ax = na.print_pna_trace(position, fig=fig, ax=ax)
             print('Trace saved')
 
         elif(pressed_key == CHANGE_DEBUG):

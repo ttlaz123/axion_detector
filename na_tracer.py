@@ -7,6 +7,132 @@ from scipy.optimize import curve_fit
 import numpy as np
  
 
+class NetworkAnalyzer:
+
+    def __init__(self, name=None):
+        self.name = name
+        self.device = self.initialize_device()
+
+    def initialize_device(self, name=None):
+        rm = pv.ResourceManager()
+        if(name is not None):
+            na_name = name 
+        elif(self.name is not None):
+            na_name = self.name 
+        else:
+            resources = rm.list_resources()
+            print('Available resources: ' + str(resources))
+            na_name = resources[0]
+        print('Using name: ' + na_name)
+        device = rm.open_resource(na_name)
+        return device 
+
+    def send_command(self, cmd_list):
+        cmd = ';'.join(cmd_list)
+        print('Sending command: ' + cmd)
+        try:
+            res = self.device.query(cmd)
+        except pv.errors.VisaIOError:
+            print('Response not received')
+            return 
+
+        print('Response Received')
+        return res 
+
+    
+    def print_old_trace(self, position=None, fig=None, ax=None):
+        trace_format = 'FORM4'
+        write_cmd = 'OUTPFORM'
+        str_res = self.send_command([trace_format, write_cmd])
+        if(str_res is None):
+            return None, None
+        response = format_trace4(str_res)
+
+        lim_cmd = 'OUTPLIML'
+        str_res = send_command(na, [lim_cmd])
+        if(str_res is None):
+            return None, None
+        freqs = format_trace4(str_res)
+
+        coefficients = fit_skewedLorentzian(freqs,response)
+        print(coefficients)
+        fig, ax = plot_trace(freqs, response, position,fit=coefficients)#,fig=fig, ax=ax)
+        return fig, ax 
+
+    def save_old_trace(self, fname="test_spec"):
+        trace_format = 'FORM4'
+        write_cmd = 'OUTPFORM'
+        str_res = self.send_command([trace_format, write_cmd])
+        response = format_trace4(str_res)
+
+        lim_cmd = 'OUTPLIML'
+        str_res = self.send_command([lim_cmd])
+        freqs = format_trace4(str_res)
+
+        np.save(fname, (freqs,response))
+
+    def get_old_freqs(self):
+        lim_cmd = 'OUTPLIML'
+        str_res = self.send_command([lim_cmd])
+        freqs = format_trace4(str_res)
+
+        return freqs
+
+    def get_odl_response(self):
+        trace_format = 'FORM4'
+        write_cmd = 'OUTPFORM'
+        str_res = self.send_command([trace_format, write_cmd])
+        response = format_trace4(str_res)
+
+        return response
+
+    def print_pna_trace(self, position=None, fig=None, ax=None):
+        responses = self.get_pna_response()
+        freqs = self.get_pna_freq()
+        coefficients = fit_skewedLorentzian(freqs,responses)
+        print(coefficients)
+        fig, ax = plot_trace(freqs, responses, position,fit=coefficients)#,fig=fig, ax=ax)
+        return fig, ax 
+
+
+    def get_pna_freq(self):
+        str_res = self.send_command(["SENS:FREQ:STAR?;STOP?"])
+        if(str_res is None):
+            return
+        freqs = np.array(str_res.split(';'), dtype=float)
+        start = freqs[0]
+        end = freqs[1]
+
+        str_res = self.send_command(["SENSe1:SWEep:POIN?"])
+        num_points = int(str_res)
+
+        freqs = np.linspace(start, end, num_points)
+
+        return freqs
+
+
+    def get_pna_response(self):
+        str_res = self.send_command(["CALC:DATA? FDATA"])
+        if(str_res is None):
+            return
+        return np.array(str_res.split(','), dtype=float)
+
+
+def format_trace4(string_result):
+    '''
+    expected format: X.XXXXXXEXX, 0.000000E00\n
+    '''
+    lines = [x.strip() for x in string_result.split('\n')]
+    points = [(line.split(',')[0].strip()) for line in lines]
+    floats = []
+    for p in points:
+        try: 
+            floats.append(float(p))
+        except ValueError:
+            #print('Not a float: ' + str(p))
+            pass
+    return floats
+
 def skewedLorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     term1 = bkg 
     term2 = bkg_slp*(x-res_f)
@@ -49,27 +175,8 @@ def fit_skewedLorentzian(f,mag):
 
     return popt
 
-def format_trace4(string_result):
-    '''
-    expected format: X.XXXXXXEXX, 0.000000E00\n
-    '''
-    lines = [x.strip() for x in string_result.split('\n')]
-    points = [(line.split(',')[0].strip()) for line in lines]
-    floats = []
-    for p in points:
-        try: 
-            floats.append(float(p))
-        except ValueError:
-            #print('Not a float: ' + str(p))
-            pass
-    return floats
 
-def send_command(na, cmd_list):
-    cmd = ';'.join(cmd_list)
-    print('Sending command: ' + cmd)
-    res = na.query(cmd)
-    print('Response Received')
-    return res 
+
     
 
 def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner', folder='spectra', fig=None, ax=None):
@@ -87,73 +194,8 @@ def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner
     fig.savefig(os.path.join(folder, str(time0)+'.png'))
     return fig, ax
 
-def print_trace(na, position=None, fig=None, ax=None):
-    trace_format = 'FORM4'
-    write_cmd = 'OUTPFORM'
-    str_res = send_command(na, [trace_format, write_cmd])
-    response = format_trace4(str_res)
-
-    lim_cmd = 'OUTPLIML'
-    str_res = send_command(na, [lim_cmd])
-    freqs = format_trace4(str_res)
-
-    coefficients = fit_skewedLorentzian(freqs,response)
-    print(coefficients)
-    fig, ax = plot_trace(freqs, response, position,fit=coefficients)#,fig=fig, ax=ax)
-    return fig, ax 
-
-def save_trace(na, fname="test_spec"):
-    trace_format = 'FORM4'
-    write_cmd = 'OUTPFORM'
-    str_res = send_command(na, [trace_format, write_cmd])
-    response = format_trace4(str_res)
-
-    lim_cmd = 'OUTPLIML'
-    str_res = send_command(na, [lim_cmd])
-    freqs = format_trace4(str_res)
-
-    np.save(fname, (freqs,response))
-
-def get_freqs(na):
-    lim_cmd = 'OUTPLIML'
-    str_res = send_command(na, [lim_cmd])
-    freqs = format_trace4(str_res)
-
-    return freqs
-
-def get_response(na):
-    trace_format = 'FORM4'
-    write_cmd = 'OUTPFORM'
-    str_res = send_command(na, [trace_format, write_cmd])
-    response = format_trace4(str_res)
-
-    return response
-
-def get_pna_freq(na):
-    str_res = send_command(na, ["SENS:FREQ:STAR?;STOP?"])
-    freqs = np.array(str_res.split(';'), dtype=float)
-    start = freqs[0]
-    end = freqs[1]
-
-    str_res = send_command(na, ["SENSe1:SWEep:POIN?"])
-    num_points = int(str_res)
-
-    freqs = np.linspace(start, end, num_points)
-
-    return freqs
 
 
-def get_pna_response(na):
-    str_res = send_command(na, ["CALC:DATA? FDATA"])
-    return np.array(str_res.split(','), dtype=float)
-
-def initialize_device():
-    rm = pv.ResourceManager()
-    resources = rm.list_resources()
-    print('Available resources: ' + str(resources))
-    na_name = resources[0]
-    device = rm.open_resource(na_name)
-    return device 
 
 
 def main():
