@@ -107,6 +107,10 @@ class AutoScanner():
                 break
             ## TODO refactor na_tracer so this monstrosity doesn't happen
             
+            if i == len(tuning_sequence)-1:
+                # don't take data after re-centering move
+                continue
+
             total_retries = 10
             for attempt in range(total_retries):
 
@@ -122,9 +126,6 @@ class AutoScanner():
 
             if i == 0:
                 responses = np.zeros((len(tuning_sequence)-1, len(response)))
-            if i == len(tuning_sequence)-1:
-                # don't take data after re-centering move
-                continue
             responses[i] = response
             if(self.hexstatus == 'stop'):
                 break
@@ -198,10 +199,17 @@ def main():
 
     auto = AutoScanner(hex, None, na)
 
+    '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.5, -0.5, -0.15, -0.2, -0.5])
     ends = -1*starts
     incrs = 0.005*np.array([1, 1, 0.1, 0.1, 1])
+    '''
+
+    coords = ['dX']
+    starts = [-0.7]
+    ends = [0.4]
+    incrs = [0.0005]
 
     err,start_pos = hex.get_position()
 
@@ -219,6 +227,18 @@ def main():
             save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
             plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
             plt.figure()
+
+    hex.incremental_move(dY=0.1)
+
+    for i in range(len(coords)):
+        seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
+        responses, freqs = auto.tuning_scan_safety(seq)
+        if(responses is not None):
+            save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+            plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+            plt.figure()
+
+    hex.incremental_move(dY=-0.1)
     
     plt.show()
 
