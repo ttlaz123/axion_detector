@@ -185,15 +185,13 @@ class HexaChamber:
         cmd = command_name + '(' + params + ')'
         return cmd
 
-    def HexapodMoveIncrementalCmd(self, GroupName=None, CoordinateSystem=None, 
+    def HexapodMoveIncrementalCmd(self, GroupName=None, CoordinateSystem='Work', 
                             dX=0, dY=0, dZ=0, dU=0, dV=0, dW=0):
         '''
         Comments here
         '''
         if(GroupName is None):
             GroupName = self.groupname
-        if(CoordinateSystem is None):
-            CoordinateSystem = 'Work'
         
         params = ','.join([GroupName, CoordinateSystem, 
                             str(dX), str(dY), str(dZ), str(dU), str(dV), str(dW)])
@@ -201,7 +199,7 @@ class HexaChamber:
         cmd = command_name + '(' + params + ')'
         return cmd 
     
-    def incremental_move(self, coord_sys=None, dX=0, dY=0, dZ=0, dU=0, dV=0, dW=0, debug=False):
+    def incremental_move(self, coord_sys='Work', dX=0, dY=0, dZ=0, dU=0, dV=0, dW=0, debug=False):
         '''
         performs the actual movement
         '''
@@ -211,6 +209,7 @@ class HexaChamber:
             print('        Socket: ' + str(self.sid))
         err, msg = self.xps.Send(socketId=self.sid, cmd = generated_command)
         return err, msg
+
 
     def set_velocity(self, vel):
         '''

@@ -20,6 +20,7 @@ import nidaqmx
 import winsound
 
 from hexachamber import HexaChamber
+from positioner import Positioner
 import na_tracer
 
 class AutoScanner():
@@ -81,6 +82,8 @@ class AutoScanner():
 
     def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False):
         '''
+        hex: HexaChamber object
+        tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
         '''
         danger_volts = 0.1
         channel = 'ai0'
@@ -98,14 +101,25 @@ class AutoScanner():
         for i,step in enumerate(tuning_sequence):
             
             print(f'Performing move: {step} ({i+1} of {len(tuning_sequence)})')
-            self.hex.incremental_move(**step)
+
+            if len(step.keys()) != 1:
+                print('only implemented moving one parameter at once so far!')
+                exit(-1)
+
+            param_name = list(step.keys())[0]
+
+            if param_name == 'dU' or param_name == 'dV' or param_name == 'dW':
+                coord_sys = 'Tool'
+            if param_name == 'dX' or param_name == 'dY' or param_name == 'dZ':
+                coord_sys = 'Work'
+            
+            self.hex.incremental_move(**step, coord_sys=coord_sys)
 
             if(self.hexstatus == 'stop'):
                 break
             time.sleep(delay)
             if(self.hexstatus == 'stop'):
                 break
-            ## TODO refactor na_tracer so this monstrosity doesn't happen
             
             if i == len(tuning_sequence)-1:
                 # don't take data after re-centering move
@@ -116,9 +130,6 @@ class AutoScanner():
 
                 response = self.na.get_pna_response()
                 if(response is None):
-                    # TODO: implement retrys
-                    #attempt=0
-                    #print(f'The VNA has fallen asleep, trying again (attempt {attempt})')
                     print(f'VNA asleep!, trying again (attempt {attempt+1}/{total_retries})')
                     continue
                 else:
@@ -145,6 +156,7 @@ def generate_single_axis_seq(coord, incr, start, end):
  
 def tuning_scan(hex, na, tuning_sequence, delay=15):
     '''
+    DON'T USE THIS, USE tuning_scan_safety
     hex: HexaChamber object
     tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
     '''
@@ -195,21 +207,25 @@ def main():
     IP = args.pos_ip
 
     hex = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
+    #pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
     na = na_tracer.NetworkAnalyzer()
 
-    auto = AutoScanner(hex, None, na)
+    pos.incremental_move(5)
+    pos.incremental_move(-5)
+    exit()
 
+    auto = AutoScanner(hex, None, na)
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
-    starts = np.array([-0.5, -0.5, -0.15, -0.2, -0.5])
+    starts = np.array([-0.1, -0.2, -0.6, -0.05, -0.05])
     ends = -1*starts
-    incrs = 0.005*np.array([1, 1, 0.1, 0.1, 1])
+    incrs = 0.05*ends
     '''
-
     coords = ['dX']
-    starts = [-0.7]
-    ends = [0.4]
-    incrs = [0.0005]
+    starts = np.array([-0.04])
+    ends = -1*starts
+    incrs = 0.005*ends
+    
 
     err,start_pos = hex.get_position()
 
@@ -218,28 +234,40 @@ def main():
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
         hex.close()
-        exit()
+        exit(err)
 
     for i in range(len(coords)):
         seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
         responses, freqs = auto.tuning_scan_safety(seq)
         if(responses is not None):
+            plt.figure()
             save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
             plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            plt.figure()
+            
+    #pos.incremental_move(5)
+    hex.incremental_move(dV=1)
 
-    hex.incremental_move(dY=0.1)
+    err,start_pos = hex.get_position()
+
+    print(f"next cycle hexapod started at {start_pos}")
+
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        hex.close()
+        exit(err)
 
     for i in range(len(coords)):
         seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
         responses, freqs = auto.tuning_scan_safety(seq)
         if(responses is not None):
+            plt.figure()
             save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
             plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            plt.figure()
+            
 
-    hex.incremental_move(dY=-0.1)
-    
+    #pos.incremental_move(5)
+    hex.incremental_move(dV=-1)
+
     plt.show()
 
     hex.close()

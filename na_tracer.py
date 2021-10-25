@@ -25,6 +25,9 @@ class NetworkAnalyzer:
             na_name = resources[0]
         print('Using name: ' + na_name)
         device = rm.open_resource(na_name)
+
+        device.write("CALC:PAR:SEL 'CH1_S11_1'")
+
         return device 
 
     def send_command(self, cmd_list):
@@ -151,6 +154,7 @@ def fit_skewedLorentzian(f,mag):
     if(np.mean(mag) < 0):
         mag = -mag
     # define the initial values
+
     bkg = (mag[0]+mag[-1])/2
     bkg_slp = (mag[-1]-mag[0])/(f[-1]-f[0])
     skw = 0
@@ -200,11 +204,14 @@ def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner
 
 def main():
     
-    device = initialize_device()
-    #fig, ax = print_trace(device)
-    #fig.show()
+    na = NetworkAnalyzer()
 
-    print(send_command(device, ["SENS:FREQ:STAR?;STOP?"]))
+    #print(na.send_command(["SENS:FREQ:STAR?;STOP?"]))
+    #print(na.device.query('CALC:PAR:CAT?'))
+    #print(na.device.write("DISP:WIND1:STATE ON"))
+    print(na.device.write("CALC:PAR:SEL 'CH1_S11_1'"))
+    plt.plot(na.get_pna_response())
+    plt.show()
     return 
 
 if __name__ == '__main__':

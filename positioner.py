@@ -132,6 +132,14 @@ class Positioner:
         self.increment = default_incr
         return default_incr
 
+    def incremental_move(self, distance):
+
+        try:
+            self.newportxps.move_stage(stage=self.stage_name, value = distance, relative=True)
+        except XPSException:
+            print('Movement too far or positioner not initialized')
+            exit(-1)
+
     def arrow_move(self, pressed_key, verbose=True, debug=False):
         '''
         Moves positioner up and down

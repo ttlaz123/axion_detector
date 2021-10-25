@@ -37,7 +37,7 @@ def fft_cable_ref_filter(responses):
 
     return filted_resp
 
-def skewedLorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
+def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     term1 = bkg 
     term2 = bkg_slp*(x-res_f)
     numer = (mintrans+skw*(x-res_f))
@@ -60,7 +60,7 @@ def get_lorentz_fit(freqs, spec):
     low_bounds = [bkg/2,-1e-3,-1,0,freqs[0],1e2]
     up_bounds = [bkg*2,1e-3,1,30,freqs[-1],1e5]
 
-    popt,pcov = curve_fit(skewedLorentzian,freqs,spec,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],method='lm')
+    popt,pcov = curve_fit(skewed_lorentzian,freqs,spec,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],method='lm')
 
     return popt
 
@@ -96,13 +96,20 @@ for i, fname in enumerate(fnames):
     if i > 0:
         plt.figure()
 
-    #plot_tuning(responses,freqs, start_pos, coord, start, end)
-    filted = fft_cable_ref_filter(responses)
+    plot_tuning(responses,freqs, start_pos, coord, start, end)
+    #filted = fft_cable_ref_filter(responses)
 
-    spec = filted[229, 3780:3880]
-    
-    print(get_lorentz_fit(freqs[3780:3880], spec))
+    #spec = filted[229, 3780:3880]
+    #plot_freqs = freqs[3780:3880]
+
+    #popt = get_lorentz_fit(plot_freqs, spec)
+    #print(popt)
+
+    #plt.plot(plot_freqs,spec, label="spectrum")
+    #plt.plot(plot_freqs, skewed_lorentzian(plot_freqs, *popt), label=f"Q={popt[-1]}")
+    #plt.legend()
 
 #plt.figure()
 #fft_cable_ref_filter(responses,freqs, start_pos, coord, start, end)
+#plot_tuning(responses, freqs, start_pos, coord, start, end)
 plt.show()
