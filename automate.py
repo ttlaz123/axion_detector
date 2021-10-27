@@ -19,6 +19,9 @@ import threading
 import nidaqmx
 import winsound
 
+import requests
+from discord import Webhook, RequestsWebhookAdapter
+
 from hexachamber import HexaChamber
 from positioner import Positioner
 import na_tracer
@@ -274,6 +277,8 @@ def main():
     #pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
     na = na_tracer.NetworkAnalyzer()
 
+    webhook = Webhook.from_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
+
     auto = AutoScanner(hex, None, na)
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
@@ -287,6 +292,8 @@ def main():
     incrs = 0.01*ends
 
     scan_multialignment(hex, auto, coords, starts, ends, incrs)
+
+    webhook.send(f"Scan of {coords} COMPLETE")
 
     plt.show()
 
