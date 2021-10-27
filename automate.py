@@ -190,6 +190,70 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
+def scan_many(coords, starts, ends, incrs, plot=True, save=True):
+
+    if not plot and not save:
+        print("WARNING: neither plotting nor saving results!")
+
+    err,start_pos = hex.get_position()
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        hex.close()
+        exit(err)
+
+    for i in range(len(coords)):
+        seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
+        responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+        if(responses is not None):
+            if plot:
+                plt.figure(figsize=[12,10])
+                plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+            if save:
+                save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+
+def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_plots=True, save_data=True,):
+    '''
+    Take several scans along coords[0], perturbing coords[1] after each scan
+    
+    ONLY WORKS FOR TWO PARAMS AT A TIME
+    '''
+
+    N_cycles = np.arange(starts[1],ends[1]+incrs[1],incrs[1]).size
+
+    # set start of coords[1]
+    kwarg = {coords[1]: starts[1]}
+    hex.incremental_move(**kwarg)
+
+    for frame in range(N_cycles):
+
+        err,start_pos = hex.get_position()
+
+        print(f"hexapod started cycle {frame}/{(ends[1]-starts[1])/incrs[1]} at {start_pos}")
+
+        if err != 0:
+            print(f'ERROR {err} with hexapod, exiting')
+            hex.close()
+            exit(err)
+        
+        seq = generate_single_axis_seq(coord=coords[0], incr=incrs[0], start=starts[0], end=ends[0])
+        responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+        if(responses is not None):
+            if plot:
+                plt.figure(figsize=[12,10])
+                plot_tuning(responses, freqs, start_pos, coords[0], starts[0], ends[0])
+                if save_plots:
+                    plt.savefig(f"plots/dV_{start_pos[4]}X.png")
+            if save_data:
+                save_tuning(responses, freqs, start_pos, coords[0], starts[0], ends[0])
+
+        kwarg = {coords[1]: incrs[1]}
+        hex.incremental_move(**kwarg)
+
+    kwarg = {coords[1]: -N_cycles*incrs[1]-starts[1]}
+    hex.incremental_move(**kwarg)
+    
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
@@ -210,10 +274,6 @@ def main():
     #pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
     na = na_tracer.NetworkAnalyzer()
 
-    pos.incremental_move(5)
-    pos.incremental_move(-5)
-    exit()
-
     auto = AutoScanner(hex, None, na)
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
@@ -221,52 +281,12 @@ def main():
     ends = -1*starts
     incrs = 0.05*ends
     '''
-    coords = ['dX']
-    starts = np.array([-0.04])
+    coords = ['dV', 'dX']
+    starts = np.array([-0.3, -0.06])
     ends = -1*starts
-    incrs = 0.005*ends
-    
+    incrs = 0.01*ends
 
-    err,start_pos = hex.get_position()
-
-    print(f"hexapod started at {start_pos}")
-
-    if err != 0:
-        print(f'ERROR {err} with hexapod, exiting')
-        hex.close()
-        exit(err)
-
-    for i in range(len(coords)):
-        seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
-        responses, freqs = auto.tuning_scan_safety(seq)
-        if(responses is not None):
-            plt.figure()
-            save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            
-    #pos.incremental_move(5)
-    hex.incremental_move(dV=1)
-
-    err,start_pos = hex.get_position()
-
-    print(f"next cycle hexapod started at {start_pos}")
-
-    if err != 0:
-        print(f'ERROR {err} with hexapod, exiting')
-        hex.close()
-        exit(err)
-
-    for i in range(len(coords)):
-        seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
-        responses, freqs = auto.tuning_scan_safety(seq)
-        if(responses is not None):
-            plt.figure()
-            save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            
-
-    #pos.incremental_move(5)
-    hex.incremental_move(dV=-1)
+    scan_multialignment(hex, auto, coords, starts, ends, incrs)
 
     plt.show()
 

@@ -155,7 +155,7 @@ class HexaChamber:
         params = ','.join([GroupName, *['double *']*6])
         command_name = 'HexapodPositionCurrentGet'
         cmd = command_name + '(' + params + ')'
-
+        
         err,msg = self.xps.Send(socketId=self.sid, cmd=cmd)
         position = np.array(msg.split(','), dtype=float)
         return err, position
