@@ -16,6 +16,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import threading
 
+from scipy.signal import argrelextrema
+
+
 import nidaqmx
 import winsound
 
@@ -83,7 +86,7 @@ class AutoScanner():
     
 
 
-    def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False):
+    def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False, DATA_TYPE=''):
         '''
         hex: HexaChamber object
         tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
@@ -193,10 +196,24 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
-def scan_many(coords, starts, ends, incrs, plot=True, save=True):
+def scan_one(coord, start, end, incr, plot=True, save=True):
+    
+    err,start_pos = hex.get_position()
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        hex.close()
+        exit(err)
+    seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
+    responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+    if plot:
+        plt.figure(figsize=[8,6])
+        plot_tuning(responses, freqs, start_pos, coord, start, end)
+    if save:
+        save_tuning(responses, freqs, start_pos, coord, start, end)
+    return responses
 
-    if not plot and not save:
-        print("WARNING: neither plotting nor saving results!")
+
+def scan_many(coords, starts, ends, incrs, plot=True, save=True):
 
     err,start_pos = hex.get_position()
     if err != 0:
@@ -204,15 +221,20 @@ def scan_many(coords, starts, ends, incrs, plot=True, save=True):
         hex.close()
         exit(err)
 
+    mode_maps = None # (coord numbr, responses)
     for i in range(len(coords)):
         seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
         responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
-        if(responses is not None):
-            if plot:
-                plt.figure(figsize=[12,10])
-                plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
-            if save:
-                save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+        if plot:
+            plt.figure(figsize=[12,10])
+            plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+        if save:
+            save_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
+        if i == 0:
+            mode_maps = np.zeros((len(coords),*responses.shape))
+        mode_maps[i] = responses
+
+    return mode_maps
 
 def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_plots=True, save_data=True,):
     '''
@@ -255,7 +277,29 @@ def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_
     kwarg = {coords[1]: -N_cycles*incrs[1]-starts[1]}
     hex.incremental_move(**kwarg)
     
+def autoalign(coords, margins, max_iters=10):
+    '''
+    Align automatically.
 
+    takes a list of parameters, and the error margin to align to, and a max_iters
+    '''
+
+    # While not out of iters,
+        # For each param, from most to least impactful:
+            # make a scan of a few (~20?) points on param axis
+            # fit maximum frequency point of fundamental (quadratic? Hyperbola?)
+            # move to that minimum
+        # if all params in margin, break
+
+    start = -0.1
+    end = -start
+    incr = end/20
+
+    iter = 0
+    while iter < max_iters:
+        for coord in coords:
+            responses = scan_one(coord, start, end, incr, plot=True, save=False)
+            
 
 def main():
     parser = argparse.ArgumentParser()
@@ -291,7 +335,7 @@ def main():
     ends = -1*starts
     incrs = 0.01*ends
 
-    scan_multialignment(hex, auto, coords, starts, ends, incrs)
+    #scan_multialignment(hex, auto, coords, starts, ends, incrs)
 
     webhook.send(f"Scan of {coords} COMPLETE")
 
