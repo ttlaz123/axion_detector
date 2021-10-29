@@ -4,7 +4,9 @@ import re
 from scipy import ndimage
 import argparse
 from scipy.optimize import curve_fit
+from scipy.signal import find_peaks
 
+import analyse
 
 def plot_tuning(responses,freqs, start_pos, coord, start, end):
 
@@ -12,57 +14,12 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     init_param = start_pos[np.where(coords==coord)][0]
 
     freqs = freqs/10**9 # GHz
-    print([freqs[0], freqs[-1], end+init_param, start+init_param])
     plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r')
     #plt.imshow(responses, interpolation='none', aspect='auto', cmap='plasma_r')
     plt.xlabel('Frequency [GHz]')
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.colorbar()
 
-def fft_cable_ref_filter(responses):
-
-    harmon = 30
-
-    resp_fft = np.fft.rfft(responses, axis=1)
-
-    filted_fft = resp_fft.copy()
-    d = 3
-    filted_fft[:,harmon-d:harmon+d] = 0
-    filted_fft[:,2*harmon] = 0
-    filted_resp = np.fft.irfft(filted_fft, n=responses.shape[1])
-    
-    #plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
-    #plt.colorbar()
-    #plt.figure()
-
-    return filted_resp
-
-def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
-    term1 = bkg 
-    term2 = bkg_slp*(x-res_f)
-    numer = (mintrans+skw*(x-res_f))
-    denom = (1+4*Q**2*((x-res_f)/res_f)**2)
-    term3 = numer/denom
-    return term1 + term2 - term3
-
-def get_lorentz_fit(freqs, spec):
-
-    # define the initial guesses
-    bkg = (spec[0]+spec[-1])/2
-    bkg_slp = (spec[-1]-spec[0])/(freqs[-1]-freqs[0])
-    skw = 0
-
-    mintrans = bkg-spec.min()
-    res_f = freqs[spec.argmin()]
-
-    Q = 1e4
-
-    low_bounds = [bkg/2,-1e-3,-1,0,freqs[0],1e2]
-    up_bounds = [bkg*2,1e-3,1,30,freqs[-1],1e5]
-
-    popt,pcov = curve_fit(skewed_lorentzian,freqs,spec,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],method='lm')
-
-    return popt
 
 
 plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
@@ -91,12 +48,10 @@ for i, fname in enumerate(fnames):
     end = float(numbers[7])
     coord = fname[-6:-4]
 
-    print(responses.shape)
-
     if i > 0:
         plt.figure()
 
-    plot_tuning(responses,freqs, start_pos, coord, start, end)
+    get_turning_point(responses,freqs, start_pos, coord, start, end)
     #filted = fft_cable_ref_filter(responses)
 
     #spec = filted[229, 3780:3880]

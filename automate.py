@@ -16,8 +16,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import threading
 
-from scipy.signal import argrelextrema
-
+from scipy.signal import find_peaks
+import analyse
 
 import nidaqmx
 import winsound
@@ -31,10 +31,11 @@ import na_tracer
 
 class AutoScanner():
 
-    def __init__(self, hexachamber, positioner, na_tracer):
-        self.hex = hexachamber
+    def __init__(self, hexachamber, positioner, na_tracer, webhook):
+        self.hexa = hexachamber
         self.pos = positioner
         self.na = na_tracer 
+        self.webhook = webhook
         self.hexstatus ='init'
 
 
@@ -74,7 +75,7 @@ class AutoScanner():
                     touching = True
                     print("Plate and cavity are touching! (or the power supply is off...)")
                     self.hexstatus = 'stop'
-                    err, msg = self.hex.abort_all()
+                    err, msg = self.hexa.abort_all()
                     print(err)
                     print(msg)
                     winsound.Beep(frequency, duration)
@@ -83,9 +84,6 @@ class AutoScanner():
         print('End safety')
         return touching
     
-    
-
-
     def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False, DATA_TYPE=''):
         '''
         hex: HexaChamber object
@@ -119,7 +117,7 @@ class AutoScanner():
             if param_name == 'dX' or param_name == 'dY' or param_name == 'dZ':
                 coord_sys = 'Work'
             
-            self.hex.incremental_move(**step, coord_sys=coord_sys)
+            self.hexa.incremental_move(**step, coord_sys=coord_sys)
 
             if(self.hexstatus == 'stop'):
                 break
@@ -160,7 +158,7 @@ def generate_single_axis_seq(coord, incr, start, end):
     seq.append({coord:-end})
     return seq
  
-def tuning_scan(hex, na, tuning_sequence, delay=15):
+def tuning_scan(hexa, na, tuning_sequence, delay=15):
     '''
     DON'T USE THIS, USE tuning_scan_safety
     hex: HexaChamber object
@@ -174,7 +172,7 @@ def tuning_scan(hex, na, tuning_sequence, delay=15):
         if i == 0:
             responses = np.zeros((len(tuning_sequence), len(response)))
         responses[i] = response
-        hex.incremental_move(**step)
+        hexa.incremental_move(**step)
 
     return responses    
 
@@ -196,12 +194,12 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
-def scan_one(coord, start, end, incr, plot=True, save=True):
+def scan_one(auto, coord, start, end, incr, plot=True, save=True):
     
-    err,start_pos = hex.get_position()
+    err,start_pos = auto.hexa.get_position()
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
-        hex.close()
+        auto.hexa.close()
         exit(err)
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
     responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
@@ -210,15 +208,18 @@ def scan_one(coord, start, end, incr, plot=True, save=True):
         plot_tuning(responses, freqs, start_pos, coord, start, end)
     if save:
         save_tuning(responses, freqs, start_pos, coord, start, end)
+    
+    auto.webhook.send(f"Scan of {coord} COMPLETE")
+
     return responses
 
 
-def scan_many(coords, starts, ends, incrs, plot=True, save=True):
+def scan_many(auto, coords, starts, ends, incrs, plot=True, save=True):
 
-    err,start_pos = hex.get_position()
+    err,start_pos = auto.hexa.get_position()
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
-        hex.close()
+        auto.hexa.close()
         exit(err)
 
     mode_maps = None # (coord numbr, responses)
@@ -234,9 +235,11 @@ def scan_many(coords, starts, ends, incrs, plot=True, save=True):
             mode_maps = np.zeros((len(coords),*responses.shape))
         mode_maps[i] = responses
 
+    auto.webhook.send(f"Scan of {coords} COMPLETE")
+
     return mode_maps
 
-def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_plots=True, save_data=True,):
+def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots=True, save_data=True,):
     '''
     Take several scans along coords[0], perturbing coords[1] after each scan
     
@@ -247,17 +250,17 @@ def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_
 
     # set start of coords[1]
     kwarg = {coords[1]: starts[1]}
-    hex.incremental_move(**kwarg)
+    auto.hexa.incremental_move(**kwarg)
 
     for frame in range(N_cycles):
 
-        err,start_pos = hex.get_position()
+        err,start_pos = auto.hexa.get_position()
 
         print(f"hexapod started cycle {frame}/{(ends[1]-starts[1])/incrs[1]} at {start_pos}")
 
         if err != 0:
             print(f'ERROR {err} with hexapod, exiting')
-            hex.close()
+            auto.hexa.close()
             exit(err)
         
         seq = generate_single_axis_seq(coord=coords[0], incr=incrs[0], start=starts[0], end=ends[0])
@@ -272,12 +275,14 @@ def scan_multialignment(hex, auto, coords, starts, ends, incrs, plot=True, save_
                 save_tuning(responses, freqs, start_pos, coords[0], starts[0], ends[0])
 
         kwarg = {coords[1]: incrs[1]}
-        hex.incremental_move(**kwarg)
+        auto.hexa.incremental_move(**kwarg)
 
     kwarg = {coords[1]: -N_cycles*incrs[1]-starts[1]}
-    hex.incremental_move(**kwarg)
+    auto.hexa.incremental_move(**kwarg)
+
+    auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(coords, margins, max_iters=10):
+def autoalign(auto, coords, margins, max_iters=10):
     '''
     Align automatically.
 
@@ -293,13 +298,23 @@ def autoalign(coords, margins, max_iters=10):
 
     start = -0.1
     end = -start
-    incr = end/20
+    N = 20
+    incr = (end-start)/N
 
     iter = 0
     while iter < max_iters:
         for coord in coords:
-            responses = scan_one(coord, start, end, incr, plot=True, save=False)
-            
+            err, start_pos = auto.hexa.get_position()
+
+            raw_responses = scan_one(auto, coord, start, end, incr, plot=False, save=True)
+            specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
+            turning_point = analyse.get_turning_point(specs)
+            freqs = auto.na.get_pna_freq()
+            param_space = np.linspace(start,end,N+1) + start_pos[0]
+            plt.plot(freqs[fundamental_inds]*1e-9, param_space, 'r.')
+            plot_tuning(specs, freqs, start_pos, coord, start, end)
+            plt.show()
+        break
 
 def main():
     parser = argparse.ArgumentParser()
@@ -317,13 +332,13 @@ def main():
     password = args.pos_password
     IP = args.pos_ip
 
-    hex = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
+    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
     #pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
     na = na_tracer.NetworkAnalyzer()
 
     webhook = Webhook.from_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
 
-    auto = AutoScanner(hex, None, na)
+    auto = AutoScanner(hexa, None, na, webhook)
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.1, -0.2, -0.6, -0.05, -0.05])
@@ -335,13 +350,12 @@ def main():
     ends = -1*starts
     incrs = 0.01*ends
 
+    autoalign(auto, ['dX'], 0.01)
     #scan_multialignment(hex, auto, coords, starts, ends, incrs)
-
-    webhook.send(f"Scan of {coords} COMPLETE")
 
     plt.show()
 
-    hex.close()
+    hexa.close()
 
 if __name__ == '__main__':
     main()
