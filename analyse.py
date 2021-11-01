@@ -1,6 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+import tuning_plotter
+
+from scipy.signal import find_peaks
+
 def fft_cable_ref_filter(responses, harmon=30):
 
     resp_fft = np.fft.rfft(responses, axis=1)
@@ -26,9 +30,6 @@ def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     term3 = numer/denom
     return term1 + term2 - term3
 
-def hyperbola(x):
-    pass
-
 def get_lorentz_fit(freqs, spec):
 
     # define the initial guesses
@@ -48,7 +49,7 @@ def get_lorentz_fit(freqs, spec):
 
     return popt
 
-def get_fundamental_inds(responses, search_order='fwd', equation=analyse.hyperbola):
+def get_fundamental_inds(responses, search_order='fwd'):
     '''
     fit an equation to the fundamental mode on a mode map
 
@@ -58,7 +59,6 @@ def get_fundamental_inds(responses, search_order='fwd', equation=analyse.hyperbo
     Usually the resonance is strongest near the top row, so fwd is default.
     '''
     N = responses.shape[0]
-    incr = (end-start)/N
     fundamental_inds = np.zeros_like(responses[:,0], dtype=int)
 
     if search_order == 'fwd':
@@ -72,14 +72,29 @@ def get_fundamental_inds(responses, search_order='fwd', equation=analyse.hyperbo
     last_peak_pos = 0 # looking for lowest freq peak first
     bounds_start = 0
     bounds_end = responses[0].size-1
-    search_range = 100 # after first iter, number of points on each side to look for next peak
+    search_range = 150 # after first iter, number of points on each side to look for next peak
+
+    initial_prominence = 2
+    subsequent_prominence = 0.25
     for i,spec in enumerate(responses):
-        peaks, _ = find_peaks(-spec[bounds_start:bounds_end], width=[0,100], prominence=0.25)
+        if i == 0:
+            prominence = initial_prominence
+        else:
+            prominence = subsequent_prominence
+        peaks, _ = find_peaks(-spec[bounds_start:bounds_end], width=[0,130], prominence=prominence)
+        if len(peaks) == 0:
+            fundamental_inds[i] = -1
+            # can be smart about where next search range should be
+            continue
         peak_num = np.argmin(abs(peaks-last_peak_pos)) # find peak closest to previous one
         fundamental_inds[i] = peaks[peak_num] + bounds_start # must correct for search range limits
         last_peak_pos = fundamental_inds[i]
         bounds_start = last_peak_pos - search_range
         bounds_end = last_peak_pos + search_range
+
+    # skip peak if not found
+    skipped = np.where(fundamental_inds < 0)
+    fundamental_inds = np.delete(fundamental_inds, skipped)
     '''
     param_space = np.linspace(start+incr/2,end-incr/2,N) + start_pos[0]
     plt.plot(freqs[fundamental_inds]*1e-9, param_space, 'r.')
@@ -89,4 +104,24 @@ def get_fundamental_inds(responses, search_order='fwd', equation=analyse.hyperbo
     plt.plot(freqs,responses[ind])
     plt.plot(freqs[fundamental_inds[ind]], responses[ind][fundamental_inds[ind]], 'r.')
     '''
-    return fundamental_inds
+    return fundamental_inds, skipped
+
+def get_turning_point(responses, coord, start_pos, start, end, incr, freqs):
+
+    coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
+
+    fundamental_inds, skipped = get_fundamental_inds(responses)
+    N = responses.shape[0]
+    x = np.linspace(start+incr/2,end-incr/2,N) + start_pos[coord_num]
+    x = np.delete(x, skipped)
+
+    p = np.polyfit(x, fundamental_inds, deg=2) # highest degree first in p
+
+    plt.figure()
+    plt.plot(freqs[fundamental_inds]*1e-9, x, 'r.')
+    plt.plot(np.polyval(p,x), x)
+    tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
+    plt.show()
+
+    turning_point = -p[1]/(2*p[0])
+    return turning_point

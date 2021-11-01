@@ -81,7 +81,7 @@ class NetworkAnalyzer:
 
         return freqs
 
-    def get_odl_response(self):
+    def get_old_response(self):
         trace_format = 'FORM4'
         write_cmd = 'OUTPFORM'
         str_res = self.send_command([trace_format, write_cmd])
