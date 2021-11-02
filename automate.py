@@ -282,7 +282,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, max_iters=10):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, plot_coarse=False, plot_fine=False):
     '''
     Align automatically.
 
@@ -298,40 +298,44 @@ def autoalign(auto, coords, margins, max_iters=10):
 
     coord_lookup = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
 
-    start = -0.1
-    end = -start
-    N = 20
-    incr = (end-start)/N
+    starts = -coarse_ranges
+    ends = -starts
+    incrs = (ends-starts)/N
 
     aligned = np.array([False]*len(coords))
 
     _, start_pos = auto.hexa.get_position()
 
+    freqs = auto.na.get_pna_freq()
+
     deltas = np.zeros(len(coords))
     # first align each coord coarsely, all at once (since no iteration)
     for i, coord in enumerate(coords):
-        raw_responses = scan_one(auto, coord, start, end, incr, plot=True, save=True)
+        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=True, save=True)
         specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
         fund_inds, skipped = analyse.get_fundamental_inds(specs)
-        param_vals = np.linspace(start+incr/2,end-incr/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
-
-        freqs = auto.na.get_pna_freq()
-        plt.plot(freqs[fund_inds]*1e-9, np.delete(param_vals, skipped), 'r.')
-        plt.show()
-        
+        param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
         coarse_align_pos = param_vals[np.argmax(fund_inds)]
         deltas[i] = coarse_align_pos - start_pos[np.where(coord_lookup == coord)]
+        
+        if plot_coarse:
+            plt.figure(figsize=[12,10])
+            plot_tuning(specs, freqs, start_pos, coords[i], starts[i], ends[i])
+            plt.plot(freqs[fund_inds]*1e-9, np.delete(param_vals,skipped), 'r.')
+
+    if plot_coarse:
+        plt.show()
 
     # do the coarse alignment in one shot
     command = {coord:deltas[i] for i, coord in enumerate(coords)}
+    print(f'Aligning... {command}')
     auto.hexa.incremental_move(**command)
 
     print(f'coarse alignment complete (deltas: {deltas})')
 
-    start = -0.05
-    end = -start
-    N = 20
-    incr = (end-start)/N
+    starts = -fine_ranges
+    ends = -starts
+    incrs = (ends-starts)/N
     # iterate to find fine alignment
 
     phase_path = [[]*len(coords)]
@@ -341,24 +345,26 @@ def autoalign(auto, coords, margins, max_iters=10):
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses = scan_one(auto, coord, start, end, incr, plot=False, save=True)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=True)
             specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
-            # THIS ASSUMES COORDS ALWAYS IN XYZUVW ORDER
-            freqs = auto.na.get_pna_freq()
-            tp = analyse.get_turning_point(specs, coord, start_pos, start, end, incr,freqs)     
-            delta = tp - start_pos[np.where(coord_lookup == coord)[0]]
+            tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],freqs,plot=plot_fine)     
+            delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
             if abs(delta) < margins[i]:
                 aligned[i] = True
             else:
-                print(f'adjusting {coord}')
-                command = {coords[i]:delta}
+                aligned[i] = False
+                command = {coord:delta}
+                print(f'Adjusting {command}')
                 auto.hexa.incremental_move(**command)
+
+            if plot_fine:
+                plt.show()
         iter += 1
     if iter >= max_iters:
-        print('autoalignment failed, max iters reached')
+        print('autoalignment FAILED, max iters reached')
     else:
-        print('autoalignment success')
+        print(f'autoalignment SUCCESS after {iter} iterations')
     
 
 def main():
@@ -391,14 +397,17 @@ def main():
     incrs = 0.05*ends
     '''
     
-    autoalign(auto, ['dX', 'dV'], [0.01,0.01])
+    autoalign(auto, ['dX', 'dV'], [0.01,0.01], coarse_ranges=np.array([0.2,0.2]), fine_ranges=np.array([0.02,0.05]), plot_coarse=True, plot_fine=True)
     webhook.send('Autoalign complete.')
 
+
+    '''
     coords = np.array(['dX', 'dV'])
     starts = np.array([-0.1, -0.1])
     ends = -1*starts
     incrs = 0.1*ends
     scan_many(auto, coords, starts, ends, incrs, plot=True)
+    '''
     
     '''
     coords = np.array(['dX', 'dV'])

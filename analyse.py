@@ -72,7 +72,7 @@ def get_fundamental_inds(responses, search_order='fwd'):
     last_peak_pos = 0 # looking for lowest freq peak first
     bounds_start = 0
     bounds_end = responses[0].size-1
-    search_range = 150 # after first iter, number of points on each side to look for next peak
+    search_range = 175 # after first iter, number of points on each side to look for next peak
 
     initial_prominence = 2
     subsequent_prominence = 0.25
@@ -106,7 +106,7 @@ def get_fundamental_inds(responses, search_order='fwd'):
     '''
     return fundamental_inds, skipped
 
-def get_turning_point(responses, coord, start_pos, start, end, incr, freqs):
+def get_turning_point(responses, coord, start_pos, start, end, incr, freqs,plot=False):
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
@@ -114,14 +114,18 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, freqs):
     N = responses.shape[0]
     x = np.linspace(start+incr/2,end-incr/2,N) + start_pos[coord_num]
     x = np.delete(x, skipped)
+    y = freqs[fundamental_inds]*1e-9
 
-    p = np.polyfit(x, fundamental_inds, deg=2) # highest degree first in p
-
-    plt.figure()
-    plt.plot(freqs[fundamental_inds]*1e-9, x, 'r.')
-    plt.plot(np.polyval(p,x), x)
-    tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
-    plt.show()
+    p = np.polyfit(x, y, deg=2) # highest degree first in p
 
     turning_point = -p[1]/(2*p[0])
+
+    if plot:
+        plt.figure()
+        tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
+        plt.plot(y, x, 'r.')
+        plt.plot(np.polyval(p,x), x, 'b--')
+        plt.plot(freqs*1e-9,turning_point*np.ones_like(freqs), 'b')
+        plt.plot(freqs*1e-9,start_pos[coord_num]*np.ones_like(freqs), 'k--')
+
     return turning_point
