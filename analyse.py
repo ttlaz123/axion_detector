@@ -49,7 +49,7 @@ def get_lorentz_fit(freqs, spec):
 
     return popt
 
-def get_fundamental_inds(responses, search_order='fwd'):
+def get_fundamental_inds(responses,  freqs, search_order='fwd'):
     '''
     fit an equation to the fundamental mode on a mode map
 
@@ -72,7 +72,7 @@ def get_fundamental_inds(responses, search_order='fwd'):
     last_peak_pos = 0 # looking for lowest freq peak first
     bounds_start = 0
     bounds_end = responses[0].size-1
-    search_range = 175 # after first iter, number of points on each side to look for next peak
+    search_range = 200 # after first iter, number of points on each side to look for next peak
 
     initial_prominence = 2
     subsequent_prominence = 0.25
@@ -82,6 +82,13 @@ def get_fundamental_inds(responses, search_order='fwd'):
         else:
             prominence = subsequent_prominence
         peaks, _ = find_peaks(-spec[bounds_start:bounds_end], width=[0,130], prominence=prominence)
+        '''
+        if i == 5:
+            plt.figure()
+            plt.plot(freqs,responses[i])
+            plt.plot(freqs[peaks+bounds_start], responses[i][peaks+bounds_start], 'r.')
+            plt.show()
+        '''
         if len(peaks) == 0:
             fundamental_inds[i] = -1
             # can be smart about where next search range should be
@@ -95,14 +102,16 @@ def get_fundamental_inds(responses, search_order='fwd'):
     # skip peak if not found
     skipped = np.where(fundamental_inds < 0)
     fundamental_inds = np.delete(fundamental_inds, skipped)
+    
     '''
     param_space = np.linspace(start+incr/2,end-incr/2,N) + start_pos[0]
     plt.plot(freqs[fundamental_inds]*1e-9, param_space, 'r.')
     plot_tuning(responses, freqs, start_pos, coord, start, end)
     plt.figure()
-    ind = 11
+    ind = 5
     plt.plot(freqs,responses[ind])
     plt.plot(freqs[fundamental_inds[ind]], responses[ind][fundamental_inds[ind]], 'r.')
+    plt.show()
     '''
     return fundamental_inds, skipped
 
@@ -110,7 +119,7 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, freqs,plot=
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    fundamental_inds, skipped = get_fundamental_inds(responses)
+    fundamental_inds, skipped = get_fundamental_inds(responses,freqs)
     N = responses.shape[0]
     x = np.linspace(start+incr/2,end-incr/2,N) + start_pos[coord_num]
     x = np.delete(x, skipped)

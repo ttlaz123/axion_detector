@@ -311,9 +311,9 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     deltas = np.zeros(len(coords))
     # first align each coord coarsely, all at once (since no iteration)
     for i, coord in enumerate(coords):
-        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=True, save=True)
+        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=True)
         specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
-        fund_inds, skipped = analyse.get_fundamental_inds(specs)
+        fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs)
         param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
         coarse_align_pos = param_vals[np.argmax(fund_inds)]
         deltas[i] = coarse_align_pos - start_pos[np.where(coord_lookup == coord)]
@@ -397,7 +397,7 @@ def main():
     incrs = 0.05*ends
     '''
     
-    autoalign(auto, ['dX', 'dV'], [0.01,0.01], coarse_ranges=np.array([0.2,0.2]), fine_ranges=np.array([0.02,0.05]), plot_coarse=True, plot_fine=True)
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.2,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), plot_coarse=True, plot_fine=True)
     webhook.send('Autoalign complete.')
 
 
