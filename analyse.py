@@ -8,11 +8,19 @@ from scipy.optimize import curve_fit
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
-    resp_fft = np.fft.rfft(responses, axis=1)
+    if len(responses.shape) == 1:
+        resp_fft =np.fft.rfft(responses)
+    else:
+        resp_fft = np.fft.rfft(responses, axis=1)
 
     filted_fft = resp_fft.copy()
-    filted_fft[:,harmon] = 0
-    filted_fft[:,2*harmon] = 0
+    if len(responses.shape) == 1:
+        filted_fft[harmon] = 0
+        filted_fft[2*harmon] = 0
+    else:
+        filted_fft[:,harmon] = 0
+        filted_fft[:,2*harmon] = 0
+
     filted_resp = np.fft.irfft(filted_fft, n=responses.shape[1])
         
     if plot:
