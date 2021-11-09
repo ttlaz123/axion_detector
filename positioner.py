@@ -107,6 +107,7 @@ class Positioner:
         gets position of positioner
         '''
         cmd = 'GroupPositionCurrentGet(Group1,double *)'
+        print(self.newportxps)
         try:
             pos = self.newportxps.get_stage_position(self.stage_name)
         except AttributeError:

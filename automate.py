@@ -152,7 +152,7 @@ def generate_single_axis_seq(coord, incr, start, end):
     Generates the list of coordinates to move the hexapod 
     TODO: comment more
     '''
-    num_moves = int((end-start)/incr)
+    num_moves = int(np.round((end-start)/incr))
     seq = [{coord:incr} for i in range(num_moves)]
     seq.insert(0, {coord:start})
     seq.append({coord:-end})
@@ -282,7 +282,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, plot_coarse=False, plot_fine=False):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True):
     '''
     Align automatically.
 
@@ -298,9 +298,14 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
 
     coord_lookup = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
 
+    if search_orders is None:
+        search_orders = ['fwd']*len(coords)
+
     starts = -coarse_ranges
     ends = -starts
     incrs = (ends-starts)/N
+
+    search_range_coarse = 200
 
     aligned = np.array([False]*len(coords))
 
@@ -311,9 +316,12 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     deltas = np.zeros(len(coords))
     # first align each coord coarsely, all at once (since no iteration)
     for i, coord in enumerate(coords):
-        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=True)
+        if starts[i] == 0:
+            # skip the coarse step for this coord
+            continue 
+        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
         specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
-        fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs)
+        fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
         param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
         coarse_align_pos = param_vals[np.argmax(fund_inds)]
         deltas[i] = coarse_align_pos - start_pos[np.where(coord_lookup == coord)]
@@ -338,6 +346,8 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     incrs = (ends-starts)/N
     # iterate to find fine alignment
 
+    search_range_fine = 50
+
     phase_path = [[]*len(coords)]
 
     iter = 0
@@ -345,9 +355,9 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=True)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
             specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
-            tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],freqs,plot=plot_fine)     
+            tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
             if abs(delta) < margins[i]:
@@ -365,6 +375,26 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         print('autoalignment FAILED, max iters reached')
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
+
+def read_spectrum(auto, harmon=None, save=True, plot=False):
+
+    freqs = auto.na.get_pna_freq()
+
+    if harmon is not None:
+        response = np.vstack((auto.na.get_pna_response(), np.zeros(len(freqs))))
+        response = analyse.fft_cable_ref_filter(response, harmon=harmon)[0]
+    else:
+        response = auto.na.get_pna_response()
+
+    Zpos = auto.pos.get_position()
+
+    if plot:
+        plt.plot(freqs,response, label=Zpos)
+    if save:
+        data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+        now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+        fname = f"{data_dir}{now_str}_zoomed_{Zpos}Z"
+        np.save(fname, np.vstack((freqs,response)))
     
 
 def main():
@@ -383,31 +413,50 @@ def main():
     password = args.pos_password
     IP = args.pos_ip
 
-    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
-    #pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
+    pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
+    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password,xps=pos.get_xps())
     na = na_tracer.NetworkAnalyzer()
 
     webhook = Webhook.from_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
 
-    auto = AutoScanner(hexa, None, na, webhook)
-    '''
-    coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
-    starts = np.array([-0.1, -0.2, -0.6, -0.05, -0.05])
-    ends = -1*starts
-    incrs = 0.05*ends
-    '''
+    auto = AutoScanner(hexa, pos, na, webhook)
     
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.2,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), plot_coarse=True, plot_fine=True)
-    webhook.send('Autoalign complete.')
+    coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
+    starts = np.array([-0.1, -0.2, -0.6, -0.1, -0.1])
+    ends = -1*starts
+    incrs = 0.005*ends
+    
+    '''
+    freqs = auto.na.get_pna_freq()
+    response = np.vstack((auto.na.get_pna_response(), np.zeros(12801)))
+    spec = analyse.fft_cable_ref_filter(response, harmon=9)[0]
 
+    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    fname = f"{now_str}_zoomed_74.4Z"
+    print(f"Saving to: {data_dir}\\{fname}.npy")
+    np.save(f"{data_dir}{fname}", np.vstack((freqs,spec)))
+
+    plt.plot(freqs*1e-9, spec)
+    '''
+
+    #autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=False)
+    #webhook.send('Autoalign complete.')
 
     '''
     coords = np.array(['dX', 'dV'])
     starts = np.array([-0.1, -0.1])
     ends = -1*starts
     incrs = 0.1*ends
-    scan_many(auto, coords, starts, ends, incrs, plot=True)
     '''
+    #scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
+
+    for i in range(5):
+        autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=False, plot_fine=False, save=False)
+        read_spectrum(auto, plot=False, save=True, harmon=9)
+        auto.pos.incremental_move(1)
+
+    auto.pos.incremental_move(-5)
     
     '''
     coords = np.array(['dX', 'dV'])
@@ -416,9 +465,11 @@ def main():
     incrs = 0.1*ends
     scan_many(auto, coords, starts, ends, incrs, plot=True)
     '''
+    plt.legend()
     plt.show()
 
     hexa.close()
+    pos.close()
 
 if __name__ == '__main__':
     main()

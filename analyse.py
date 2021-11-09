@@ -4,21 +4,21 @@ import matplotlib.pyplot as plt
 import tuning_plotter
 
 from scipy.signal import find_peaks
+from scipy.optimize import curve_fit
 
-def fft_cable_ref_filter(responses, harmon=30):
+def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
     resp_fft = np.fft.rfft(responses, axis=1)
 
     filted_fft = resp_fft.copy()
-    d = 3
-    filted_fft[:,harmon-d:harmon+d] = 0
+    filted_fft[:,harmon] = 0
     filted_fft[:,2*harmon] = 0
     filted_resp = np.fft.irfft(filted_fft, n=responses.shape[1])
-    
-    #plt.figure()
-    #plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
-    #plt.colorbar()
-    #plt.figure()
+        
+    if plot:
+        plt.figure()
+        plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
+        plt.colorbar()
 
     return filted_resp
 
@@ -49,7 +49,15 @@ def get_lorentz_fit(freqs, spec):
 
     return popt
 
-def get_fundamental_inds(responses,  freqs, search_order='fwd'):
+def chan2freq(chan,freqs):
+    return chan*(freqs[-1]-freqs[0])/freqs.size+freqs[0]
+
+class autoaligner():
+    pass
+    #def __init__(self, search_order='fwd', )
+        # describe all the knobs to turn
+
+def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175):
     '''
     fit an equation to the fundamental mode on a mode map
 
@@ -60,28 +68,34 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd'):
     '''
     N = responses.shape[0]
     fundamental_inds = np.zeros_like(responses[:,0], dtype=int)
+    all_inds = np.zeros_like(responses[:,0], dtype=object) # for diagnostic purposes
 
-    if search_order == 'fwd':
-        pass
-    elif search_order == 'rev':
-        responses = np.flip(responses,axis=0)
-    else:
+    if search_order != 'fwd' and search_order != 'rev':
         print('get_fundamental got a bad arg for search_order, exiting')
         exit(-1)
 
     last_peak_pos = 0 # looking for lowest freq peak first
     bounds_start = 0
     bounds_end = responses[0].size-1
-    search_range = 200 # after first iter, number of points on each side to look for next peak
 
-    initial_prominence = 2
-    subsequent_prominence = 0.25
-    for i,spec in enumerate(responses):
+    initial_prominence = 1
+    subsequent_prominence = 0.4
+    for i in range(N):
+        if search_order == 'rev':
+            n = N - 1 - i
+        else:
+            n = i
         if i == 0:
             prominence = initial_prominence
         else:
             prominence = subsequent_prominence
-        peaks, _ = find_peaks(-spec[bounds_start:bounds_end], width=[0,130], prominence=prominence)
+        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,100],prominence=prominence)
+        
+        if i == 0:
+            metric = abs(peaks) # want leftmost peak for first row (min peak pos)
+        else:
+            metric = abs(peaks+bounds_start-last_peak_pos)*properties['widths'] # narrowest peak closest to prev. peak
+        
         '''
         if i == 5:
             plt.figure()
@@ -90,18 +104,20 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd'):
             plt.show()
         '''
         if len(peaks) == 0:
-            fundamental_inds[i] = -1
-            # can be smart about where next search range should be
+            fundamental_inds[n] = -1
+            # can be smart about where next search range should be later
             continue
-        peak_num = np.argmin(abs(peaks-last_peak_pos)) # find peak closest to previous one
-        fundamental_inds[i] = peaks[peak_num] + bounds_start # must correct for search range limits
-        last_peak_pos = fundamental_inds[i]
+        peak_num = np.argmin(metric)
+        all_inds[n] = peaks + bounds_start
+        fundamental_inds[n] = peaks[peak_num] + bounds_start # must correct for search range limits
+        last_peak_pos = fundamental_inds[n]
         bounds_start = last_peak_pos - search_range
         bounds_end = last_peak_pos + search_range
 
     # skip peak if not found
     skipped = np.where(fundamental_inds < 0)
     fundamental_inds = np.delete(fundamental_inds, skipped)
+    all_inds = np.delete(all_inds, skipped)
     
     '''
     param_space = np.linspace(start+incr/2,end-incr/2,N) + start_pos[0]
@@ -115,11 +131,11 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd'):
     '''
     return fundamental_inds, skipped
 
-def get_turning_point(responses, coord, start_pos, start, end, incr, freqs,plot=False):
+def get_turning_point(responses, coord, start_pos, start, end, incr, search_range,freqs,plot=False):
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    fundamental_inds, skipped = get_fundamental_inds(responses,freqs)
+    fundamental_inds, skipped = get_fundamental_inds(responses,freqs,search_order='rev',search_range=search_range)
     N = responses.shape[0]
     x = np.linspace(start+incr/2,end-incr/2,N) + start_pos[coord_num]
     x = np.delete(x, skipped)

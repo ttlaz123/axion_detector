@@ -55,32 +55,40 @@ if __name__ == '__main__':
         incr = (end-start)/N
 
         specs = analyse.fft_cable_ref_filter(responses, harmon=9)
-        
-        fundamental_inds = analyse.get_fundamental_inds(specs)
 
-        param_space = np.linspace(start+incr/2,end-incr/2,N) + start_pos[0]
-        plt.plot(freqs[fundamental_inds]*1e-9, param_space, 'r.')
-        plot_tuning(specs, freqs, start_pos, coord, start, end)
-        tp = analyse.get_turning_point(specs, 'dX', start_pos, start, end, incr)
-        plt.plot(freqs*1e-9,tp*np.ones_like(freqs))
+        coord_num = np.where(coord == np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']))[0]
+        
+        '''
+        fundamental_inds, skipped, all_inds = analyse.get_fundamental_inds(specs, freqs, search_range=50, search_order='fwd')
+        param_space = np.delete(np.linspace(start+incr/2,end-incr/2,N) + start_pos[coord_num], skipped)
         plt.figure()
-        ind = -5
+        plot_tuning(specs, freqs, start_pos, coord, start, end)
+
+        for i,inds in enumerate(all_inds):
+            plt.plot(freqs[inds]*1e-9, param_space[i]*np.ones_like(freqs[inds]), 'b.')
+        plt.plot(freqs[fundamental_inds]*1e-9, param_space, 'r.')
+        #tp = analyse.get_turning_point(specs, 'dX', start_pos, start, end, incr)
+        #plt.plot(freqs*1e-9,tp*np.ones_like(freqs))
+        plt.figure()
+        ind = 8
         plt.plot(freqs,specs[ind])
         plt.plot(freqs[fundamental_inds[ind]], specs[ind][fundamental_inds[ind]], 'r.')
+        '''
 
-        #filted = fft_cable_ref_filter(responses)
+        plt.figure()
+        plot_tuning(specs, freqs, start_pos, coord, start, end)
 
-        #spec = filted[229, 3780:3880]
-        #plot_freqs = freqs[3780:3880]
+    '''
+    data=np.load(f"{data_dir}{fnames[0]}")
+    freqs = data[0]
+    spec = data[1]
 
-        #popt = get_lorentz_fit(plot_freqs, spec)
-        #print(popt)
+    popt = analyse.get_lorentz_fit(freqs, spec)
+    print(popt)
 
-        #plt.plot(plot_freqs,spec, label="spectrum")
-        #plt.plot(plot_freqs, skewed_lorentzian(plot_freqs, *popt), label=f"Q={popt[-1]}")
-        #plt.legend()
+    plt.plot(freqs,spec, label="spectrum")
+    plt.plot(freqs, analyse.skewed_lorentzian(freqs, *popt), label=f"Q={popt[-1]}")
+    plt.legend()
+    '''
 
-    #plt.figure()
-    #fft_cable_ref_filter(responses,freqs, start_pos, coord, start, end)
-    #plot_tuning(responses, freqs, start_pos, coord, start, end)
     plt.show()

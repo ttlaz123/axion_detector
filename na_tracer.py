@@ -12,6 +12,7 @@ class NetworkAnalyzer:
     def __init__(self, name=None):
         self.name = name
         self.device = self.initialize_device()
+        self.choose_channel()
 
     def initialize_device(self, name=None):
         rm = pv.ResourceManager()
@@ -25,8 +26,6 @@ class NetworkAnalyzer:
             na_name = resources[0]
         print('Using name: ' + na_name)
         device = rm.open_resource(na_name)
-
-        device.write("CALC:PAR:SEL 'CH1_S11_1'")
 
         return device 
 
@@ -42,6 +41,8 @@ class NetworkAnalyzer:
         print('Response Received')
         return res 
 
+    def choose_channel(self, channel_name='CH1_S11_1'):
+        self.device.write(f"CALC:PAR:SEL '{channel_name}'")
     
     def print_old_trace(self, position=None, fig=None, ax=None):
         trace_format = 'FORM4'
@@ -116,6 +117,12 @@ class NetworkAnalyzer:
 
     def get_pna_response(self):
         str_res = self.send_command(["CALC:DATA? FDATA"])
+        if(str_res is None):
+            return
+        return np.array(str_res.split(','), dtype=float)
+
+    def get_pna_complex_response(self):
+        str_res = self.send_command(["CALC:DATA? CDATA"])
         if(str_res is None):
             return
         return np.array(str_res.split(','), dtype=float)
