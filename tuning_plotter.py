@@ -66,7 +66,10 @@ if __name__ == '__main__':
     inds = np.argsort(Zposs)
     fnames = fnames[inds]
     Zposs = Zposs[inds]
-    
+
+    s = 2150
+    e = 3100
+    plt.figure(figsize=(12,8))
     for i, fname in enumerate(fnames):
         print(f'reading: {fname}')
 
@@ -74,9 +77,32 @@ if __name__ == '__main__':
         
         freqs, response = np.load(fname)
 
-        plt.plot(freqs, response, label=Zpos)
+        freqs = freqs[s:e]
+        response = response[s:e]
 
-    plt.legend()
+        peaks, properties = find_peaks(-response, prominence=3, width=1)
+
+        fund_peak = peaks[0]
+
+        width = int(np.round(properties['widths'][0] * 2))
+        left = fund_peak - width
+        right = fund_peak + width
+
+        fit_freqs = freqs[left:right]
+        fit_response = response[left:right]
+
+        popt = analyse.get_lorentz_fit(fit_freqs, fit_response)
+        
+        plt.title("Fundamental Mode at Several Tuning Positions", fontsize=30)
+        plt.xlabel("Frequency (GHz)", fontsize=20)
+        plt.ylabel("S11 (dB)", fontsize=20)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.plot(freqs*1e-9, response, label=f"Height: {int(Zpos-Zposs[0])} mm, Q: {int(np.round(popt[-1]))}")
+        #plt.plot(freqs[fund_peak]*1e-9, response[fund_peak], 'ro')
+        plt.plot(fit_freqs*1e-9, analyse.skewed_lorentzian(fit_freqs, *popt), 'k--')
+
+    plt.legend(fontsize=15)
     plt.show()
     exit()
 
