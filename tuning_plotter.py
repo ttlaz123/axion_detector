@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import re
-from scipy import ndimage
 import argparse
 from scipy.optimize import curve_fit
 from scipy.signal import find_peaks
+
+import glob
 
 import analyse
 
@@ -20,10 +21,27 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.colorbar()
 
+def load_tuning(fname):
+
+    data = np.load(f"{data_dir}{fname}")
+    freqs = data[0]
+    responses = data[1:]
+
+    coord_str = fname.split('_')[1]
+    numbers = re.split('[^0-9-.]', coord_str)
+    start_pos = np.array(numbers[:6], dtype=float)
+    start = float(numbers[6])
+    end = float(numbers[7])
+    coord = fname[-6:-4]
+
+    return freqs, responses, start_pos, coord, start, end
+    
+
 if __name__ == '__main__':
 
     plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
 
     parser = argparse.ArgumentParser()
 
@@ -35,19 +53,60 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     fnames = args.fnames
 
+    # this is for over-plotting all single spectra in a directory
+    spec_dir = fnames[0]
+
+    fnames = np.array(glob.glob(rf'{data_dir}{spec_dir}/*.npy'))
+    Zposs = np.zeros_like(fnames, dtype=float)
+
+    # darn arbitrary ordering!
+    for i,fname in enumerate(fnames):
+        Zposs[i] = fname[-9:-5]
+
+    inds = np.argsort(Zposs)
+    fnames = fnames[inds]
+    Zposs = Zposs[inds]
+    
+    for i, fname in enumerate(fnames):
+        print(f'reading: {fname}')
+
+        Zpos = Zposs[i]
+        
+        freqs, response = np.load(fname)
+
+        plt.plot(freqs, response, label=Zpos)
+
+    plt.legend()
+    plt.show()
+    exit()
+
+
     for i, fname in enumerate(fnames):
 
-        data = np.load(f"{data_dir}{fname}")
-        freqs = data[0]
-        responses = data[1:]
+        freqs, response = np.load(f'{data_dir}{fname}')
 
-        coord_str = fname.split('_')[1]
-        numbers = re.split('[^0-9-.]', coord_str)
-        start_pos = np.array(numbers[:6], dtype=float)
-        start = float(numbers[6])
-        end = float(numbers[7])
-        coord = fname[-6:-4]
+        s = 2950
+        e=3125
 
+        freqs = freqs[s:e]
+
+        spec = analyse.fft_cable_ref_filter(response, harmon=9)
+
+        spec=spec[s:e]
+
+        popt = analyse.get_lorentz_fit(freqs, spec)
+
+        plt.plot(freqs*1e-9,spec, 'k')
+        plt.plot(freqs*1e-9,analyse.skewed_lorentzian(freqs,*popt), 'r', label=f"Q: {popt[-1]}")
+        plt.title('Spectrum of Axion Cavity')
+        plt.ylabel('S11 (dB)')
+        plt.xlabel('Frequency (GHz)')
+        plt.legend()
+        plt.show()
+        exit()
+
+        freqs, responses, start_pos, coord, start, end = load_tuning(fname)
+        
         if i > 0:
             plt.figure()
 
