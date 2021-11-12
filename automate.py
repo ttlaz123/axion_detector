@@ -114,10 +114,13 @@ class AutoScanner():
 
             if param_name == 'dU' or param_name == 'dV' or param_name == 'dW':
                 coord_sys = 'Tool'
-            if param_name == 'dX' or param_name == 'dY' or param_name == 'dZ':
+            if param_name == 'dX' or param_name == 'dY':
                 coord_sys = 'Work'
             
-            self.hexa.incremental_move(**step, coord_sys=coord_sys)
+            if param_name != 'dZ':
+                self.hexa.incremental_move(**step, coord_sys=coord_sys)
+            else:
+                self.pos.incremental_move(step['dZ'])
 
             if(self.hexstatus == 'stop'):
                 break
@@ -200,7 +203,10 @@ def scan_one(auto, coord, start, end, incr, plot=True, save=True):
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
         auto.hexa.close()
+    
         exit(err)
+    start_pos[2] = auto.pos.get_position()
+
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
     responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
     if plot:
@@ -440,7 +446,7 @@ def main():
     plt.plot(freqs*1e-9, spec)
     '''
 
-    #autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=False)
+    #autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=False)
     #webhook.send('Autoalign complete.')
 
     '''
@@ -451,21 +457,23 @@ def main():
     '''
     #scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
 
+    '''
     for i in range(5):
         autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=False, plot_fine=False, save=False)
         read_spectrum(auto, plot=False, save=True, harmon=9)
         auto.pos.incremental_move(1)
 
     auto.pos.incremental_move(-5)
+    '''
     
-    '''
-    coords = np.array(['dX', 'dV'])
-    starts = np.array([-0.5, -0.5])
-    ends = -1*starts
-    incrs = 0.1*ends
-    scan_many(auto, coords, starts, ends, incrs, plot=True)
-    '''
-    plt.legend()
+    
+    coord = 'dZ'
+    start = -0.01
+    end = -1*start
+    incr = 0.5*end
+    scan_one(auto, coord, start, end, incr, plot=True)
+    
+    #plt.legend()
     plt.show()
 
     hexa.close()
