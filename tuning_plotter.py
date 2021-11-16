@@ -40,8 +40,8 @@ def load_tuning(fname):
 if __name__ == '__main__':
 
     plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
-    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
+    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    #data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
 
     parser = argparse.ArgumentParser()
 
@@ -67,8 +67,8 @@ if __name__ == '__main__':
     fnames = fnames[inds]
     Zposs = Zposs[inds]
 
-    s = 2150
-    e = 3100
+    s = 0
+    e = -1
     plt.figure(figsize=(12,8))
     for i, fname in enumerate(fnames):
         print(f'reading: {fname}')
