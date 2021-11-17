@@ -41,25 +41,11 @@ def load_tuning(fname):
 
     return freqs, responses, start_pos, coord, start, end
 
-if __name__ == '__main__':
-
-    plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
-    #data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('fnames', type=str, nargs='+', help=f'data file names to plot (assumed to be in {data_dir} unless --abs specified)')
-    parser.add_argument('--abs', dest='data_dir', action='store_const', const='', default=data_dir, help='add to indicate that your fnames have an absolute path')
-
-    args = parser.parse_args()
-
-    data_dir = args.data_dir
-    fnames = args.fnames
+def plot_dir_with_spectra(spec_dir):
 
     # this is for over-plotting all single spectra in a directory & fitting fundamental
 
-    fnames = np.array(glob.glob(rf'{data_dir}{spec_dir}/*.npy'))
+    fnames = np.array(glob.glob(rf'{spec_dir}/*.npy'))
     Zposs = np.zeros_like(fnames, dtype=float)
 
     # darn arbitrary ordering!
@@ -145,7 +131,7 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     fnames = args.fnames
 
-    plot_dir_with_spectra(fnames[0])
+    plot_dir_with_spectra(f'{data_dir}{fnames[0]}')
     plt.show()
     exit()
 
