@@ -17,9 +17,14 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     freqs = freqs/10**9 # GHz
     plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r')
     #plt.imshow(responses, interpolation='none', aspect='auto', cmap='plasma_r')
-    plt.xlabel('Frequency [GHz]')
-    plt.ylabel(f'Tuning Parameter: {coord[-1]}')
-    plt.colorbar()
+    plt.title(f"Mode Map for {coord[-1]}", fontsize=30, y=1.01)
+    plt.xlabel('Frequency (GHz)', fontsize=20)
+    plt.ylabel(f'{coord[-1]} Position (mm)', fontsize=20)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    cb = plt.colorbar()
+    cb.set_label("S11 (dB)", fontsize=20)
+    cb.ax.tick_params(labelsize=20)
 
 def load_tuning(fname):
 
@@ -35,26 +40,10 @@ def load_tuning(fname):
     coord = fname[-6:-4]
 
     return freqs, responses, start_pos, coord, start, end
-    
 
-if __name__ == '__main__':
+def plot_dir_with_spectra(spec_dir):
 
-    plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
-    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('fnames', type=str, nargs='+', help=f'data file names to plot (assumed to be in {data_dir} unless --abs specified)')
-    parser.add_argument('--abs', dest='data_dir', action='store_const', const='', default=data_dir, help='add to indicate that your fnames have an absolute path')
-
-    args = parser.parse_args()
-
-    data_dir = args.data_dir
-    fnames = args.fnames
-
-    # this is for over-plotting all single spectra in a directory
-    spec_dir = fnames[0]
+    # this is for over-plotting all single spectra in a directory & fitting fundamental
 
     fnames = np.array(glob.glob(rf'{data_dir}{spec_dir}/*.npy'))
     Zposs = np.zeros_like(fnames, dtype=float)
@@ -101,35 +90,52 @@ if __name__ == '__main__':
         plt.plot(freqs*1e-9, response, label=f"Height: {int(Zpos-Zposs[0])} mm, Q: {int(np.round(popt[-1]))}")
         #plt.plot(freqs[fund_peak]*1e-9, response[fund_peak], 'ro')
         plt.plot(fit_freqs*1e-9, analyse.skewed_lorentzian(fit_freqs, *popt), 'k--')
-
+        
     plt.legend(fontsize=15)
+
+def plot_single_spectrum(fname, start=0, end=-1):
+    freqs, response = np.load(f'{data_dir}{fname}')
+
+    s = 2950
+    e=3125
+
+    freqs = freqs[s:e]
+
+    spec = analyse.fft_cable_ref_filter(response, harmon=9)
+
+    spec=spec[s:e]
+
+    popt = analyse.get_lorentz_fit(freqs, spec)
+
+    plt.plot(freqs*1e-9,spec, 'k')
+    plt.plot(freqs*1e-9,analyse.skewed_lorentzian(freqs,*popt), 'r', label=f"Q: {popt[-1]}")
+    plt.title('Spectrum of Axion Cavity')
+    plt.ylabel('S11 (dB)')
+    plt.xlabel('Frequency (GHz)')
+    plt.legend()
+
+
+if __name__ == '__main__':
+
+    plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
+    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('fnames', type=str, nargs='+', help=f'data file names to plot (assumed to be in {data_dir} unless --abs specified)')
+    parser.add_argument('--abs', dest='data_dir', action='store_const', const='', default=data_dir, help='add to indicate that your fnames have an absolute path')
+
+    args = parser.parse_args()
+
+    data_dir = args.data_dir
+    fnames = args.fnames
+
+    plot_dir_with_spectra(fnames[0])
     plt.show()
     exit()
 
-
     for i, fname in enumerate(fnames):
-
-        freqs, response = np.load(f'{data_dir}{fname}')
-
-        s = 2950
-        e=3125
-
-        freqs = freqs[s:e]
-
-        spec = analyse.fft_cable_ref_filter(response, harmon=9)
-
-        spec=spec[s:e]
-
-        popt = analyse.get_lorentz_fit(freqs, spec)
-
-        plt.plot(freqs*1e-9,spec, 'k')
-        plt.plot(freqs*1e-9,analyse.skewed_lorentzian(freqs,*popt), 'r', label=f"Q: {popt[-1]}")
-        plt.title('Spectrum of Axion Cavity')
-        plt.ylabel('S11 (dB)')
-        plt.xlabel('Frequency (GHz)')
-        plt.legend()
-        plt.show()
-        exit()
 
         freqs, responses, start_pos, coord, start, end = load_tuning(fname)
         
@@ -160,7 +166,7 @@ if __name__ == '__main__':
         plt.plot(freqs[fundamental_inds[ind]], specs[ind][fundamental_inds[ind]], 'r.')
         '''
 
-        plt.figure()
+        plt.figure(figsize=(12,8))
         plot_tuning(specs, freqs, start_pos, coord, start, end)
 
     '''
