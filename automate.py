@@ -446,7 +446,11 @@ def main():
     plt.plot(freqs*1e-9, spec)
     '''
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.005,0.005,0.005], coarse_ranges=np.array([0.1,0.15,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=False)
+    scan_one(auto, 'dX', -0.5, 0.5, 0.05, plot=True,save=True)
+    plt.show()
+    exit()
+
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.005,0.005,0.005], coarse_ranges=np.array([0.1,0.15,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=False, plot_fine=False)
     webhook.send('Autoalign complete.')
 
     '''
