@@ -21,12 +21,15 @@ def fft_cable_ref_filter(responses, harmon=9, plot=False):
         filted_fft[:,harmon] = 0
         filted_fft[:,2*harmon] = 0
 
-    filted_resp = np.fft.irfft(filted_fft, n=responses.shape[1])
+    filted_resp = np.fft.irfft(filted_fft, n=responses.shape[-1])
         
     if plot:
         plt.figure()
-        plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
-        plt.colorbar()
+        if len(reponses.shape) == 1:
+            plt.plot(filted_fft)
+        else:
+            plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
+            plt.colorbar()
 
     return filted_resp
 
