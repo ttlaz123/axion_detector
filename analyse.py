@@ -72,10 +72,20 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     '''
     fit an equation to the fundamental mode on a mode map
 
-    start_from is either fwd or rev. We look for peaks near the one just found, but 
+    KNOBS TO TURN:
+
+    start_from (either fwd or rev): We look for peaks near the one just found, but 
     we need to start somewhere. So, we find the leftmost (lowest freq) peak on either the
     top or bottom row, working either top down (fwd) or bottom up (rev).
     Usually the resonance is strongest near the top row, so fwd is default.
+
+    search_range: number of indices to look away from the peak on the prev. row when looking for the next peak. Is adjusted for number of frequency points. (I found this number with 6401 points)
+
+    initial_prominence: prominence required to count as a peak on the first row. more stringent to ignore random noise / artifacts
+    subsequent prominence: prom. for peaks on rows after first. less stringent as the resonance can get pretty weak and we still want to see its peaks
+    max_width: maximum width for potential peaks. Any above this width are not considered peaks. Also adjusted for number of freq. points
+
+    also feel free to tweak the code itself.
     '''
     N = responses.shape[0]
     f_points = responses.shape[1]
@@ -92,6 +102,8 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
 
     initial_prominence = 1
     subsequent_prominence = 0.4
+    max_width = 100 * f_points/6401 # 6401 is the resolution this was tweaked at
+    search_range = search_range * f_points/6401 # this hasn't been tested. maybe do without this line.
     for i in range(N):
         if search_order == 'rev':
             n = N - 1 - i
@@ -101,7 +113,6 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
             prominence = initial_prominence
         else:
             prominence = subsequent_prominence
-        max_width = 100 * f_points/6401 # the resolution this was tweaked at
         peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence)
         
         if i == 0:
@@ -119,6 +130,7 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
         if len(peaks) == 0:
             fundamental_inds[n] = -1
             # can be smart about where next search range should be later
+            # but there is danger in being too smart...
             continue
         peak_num = np.argmin(metric)
         all_inds[n] = peaks + bounds_start
