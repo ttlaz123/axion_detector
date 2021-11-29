@@ -118,8 +118,8 @@ def plot_single_spectrum(fname, start=0, end=-1):
 if __name__ == '__main__':
 
     plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
-    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
+    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    #data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
 
     parser = argparse.ArgumentParser()
 
@@ -131,10 +131,6 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     fnames = args.fnames
 
-    plot_dir_with_spectra(f'{data_dir}{fnames[0]}')
-    plt.show()
-    exit()
-
     for i, fname in enumerate(fnames):
 
         freqs, responses, start_pos, coord, start, end = load_tuning(fname)
@@ -145,7 +141,7 @@ if __name__ == '__main__':
         N = responses.shape[0]
         incr = (end-start)/N
 
-        specs = analyse.fft_cable_ref_filter(responses, harmon=9)
+        specs = analyse.fft_cable_ref_filter(responses, harmon=64)
 
         coord_num = np.where(coord == np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']))[0]
         
@@ -168,6 +164,8 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(12,8))
         plot_tuning(specs, freqs, start_pos, coord, start, end)
+        plt.figure()
+        plot_tuning(responses, freqs, start_pos, coord, start, end)
 
     '''
     data=np.load(f"{data_dir}{fnames[0]}")

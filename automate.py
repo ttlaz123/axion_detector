@@ -288,7 +288,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False):
     '''
     Align automatically.
 
@@ -319,33 +319,37 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
 
     freqs = auto.na.get_pna_freq()
 
-    deltas = np.zeros(len(coords))
-    # first align each coord coarsely, all at once (since no iteration)
-    for i, coord in enumerate(coords):
-        if starts[i] == 0:
-            # skip the coarse step for this coord
-            continue 
-        raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
-        specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
-        fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
-        param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
-        coarse_align_pos = param_vals[np.argmax(fund_inds)]
-        deltas[i] = coarse_align_pos - start_pos[np.where(coord_lookup == coord)]
-        
+
+    if not skip_coarse:
+        deltas = np.zeros(len(coords))
+        # first align each coord coarsely, all at once (since no iteration)
+        for i, coord in enumerate(coords):
+            if starts[i] == 0:
+                # skip the coarse step for this coord
+                continue 
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
+            fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
+            param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
+            coarse_align_pos = param_vals[np.argmax(fund_inds)]
+            deltas[i] = coarse_align_pos - start_pos[np.where(coord_lookup == coord)]
+            
+            if plot_coarse:
+                plt.figure(figsize=[12,10])
+                plot_tuning(specs, freqs, start_pos, coords[i], starts[i], ends[i])
+                plt.plot(freqs[fund_inds]*1e-9, np.delete(param_vals,skipped), 'r.')
+
         if plot_coarse:
-            plt.figure(figsize=[12,10])
-            plot_tuning(specs, freqs, start_pos, coords[i], starts[i], ends[i])
-            plt.plot(freqs[fund_inds]*1e-9, np.delete(param_vals,skipped), 'r.')
+            plt.show()
 
-    if plot_coarse:
-        plt.show()
+        # do the coarse alignment in one shot
+        command = {coord:deltas[i] for i, coord in enumerate(coords)}
+        print(f'Aligning... {command}')
+        auto.hexa.incremental_move(**command)
 
-    # do the coarse alignment in one shot
-    command = {coord:deltas[i] for i, coord in enumerate(coords)}
-    print(f'Aligning... {command}')
-    auto.hexa.incremental_move(**command)
-
-    print(f'coarse alignment complete (deltas: {deltas})')
+        print(f'coarse alignment COMPLETE (deltas: {deltas})')
+    else:
+        print('coarse alignmet SKIPPED')
 
     starts = -fine_ranges
     ends = -starts
@@ -445,13 +449,18 @@ def main():
 
     plt.plot(freqs*1e-9, spec)
     '''
-
-    scan_one(auto, 'dX', -0.5, 0.5, 0.05, plot=True,save=True)
+    
+    '''
+    r = 0.5
+    scan_one(auto, 'dY', -r, r, 0.1*r, plot=True,save=True)
     plt.show()
     exit()
+    '''
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.005,0.005,0.005], coarse_ranges=np.array([0.1,0.15,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=False, plot_fine=False)
+    '''
+    autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     webhook.send('Autoalign complete.')
+    '''
 
     '''
     coords = np.array(['dX', 'dV'])
