@@ -56,7 +56,7 @@ class AutoScanner():
         
         '''
         
-        frequency = 2500  # Set Frequency To 2500 Hertz
+        frequency = 600  # Set Frequency To 2500 Hertz
         duration = 1000  # Set Duration To 1000 ms == 1 second
         taskname = 'Dev' + str(task_number)
         voltage_channel = '/'.join([taskname, channel])
@@ -75,16 +75,35 @@ class AutoScanner():
                     touching = True
                     print("Plate and cavity are touching! (or the power supply is off...)")
                     self.hexstatus = 'stop'
-                    err, msg = self.hexa.abort_all()
-                    print(err)
-                    print(msg)
                     winsound.Beep(frequency, duration)
                     break 
                 time_elapsed = time.time()-time_start
         print('End safety')
         return touching
+
+    def incremental_move(self, step):
+        """
+        step: {"coord": increment}
+
+        move along coord by increment, using hexa unless cood is 'dZ' in which case positioner is used
+        """
+
+        print(f'Performing move: {step} ')
+
+        param_name = list(step.keys())[0]
+
+        if param_name == 'dU' or param_name == 'dV' or param_name == 'dW':
+            coord_sys = 'Tool'
+        if param_name == 'dX' or param_name == 'dY':
+            coord_sys = 'Work'
+        
+        if param_name != 'dZ':
+            self.hexa.incremental_move(**step, coord_sys=coord_sys)
+        else:
+            self.pos.incremental_move(step['dZ'])
+
     
-    def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=False, DATA_TYPE=''):
+    def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=True, DATA_TYPE=''):
         '''
         hex: HexaChamber object
         tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
@@ -101,31 +120,33 @@ class AutoScanner():
             safety_thread.start()
         responses = None
 
+        time.sleep(delay)
+        if(self.hexstatus == 'stop'):
+            print("plate and cavity touching at the beginning of the run!! (probably power supply off...)")
+            exit(-1)
+
         freqs = self.na.get_pna_freq()
         for i,step in enumerate(tuning_sequence):
             
-            print(f'Performing move: {step} ({i+1} of {len(tuning_sequence)})')
+            print(f'Iteration {i+1} of {len(tuning_sequence)}')
 
             if len(step.keys()) != 1:
                 print('only implemented moving one parameter at once so far!')
                 exit(-1)
 
-            param_name = list(step.keys())[0]
-
-            if param_name == 'dU' or param_name == 'dV' or param_name == 'dW':
-                coord_sys = 'Tool'
-            if param_name == 'dX' or param_name == 'dY':
-                coord_sys = 'Work'
-            
-            if param_name != 'dZ':
-                self.hexa.incremental_move(**step, coord_sys=coord_sys)
-            else:
-                self.pos.incremental_move(step['dZ'])
-
             if(self.hexstatus == 'stop'):
+                # undo previous step
+                reverse_step = {k: -1*v for k, v in tuning_sequence[i-1].items()}
+                self.incremental_move(reverse_step)
                 break
+
+            self.incremental_move(step)
+
             time.sleep(delay)
             if(self.hexstatus == 'stop'):
+                # undo step done just now
+                reverse_step = {k: -1*v for k, v in tuning_sequence[i].items()}
+                self.incremental_move(reverse_step)
                 break
             
             if i == len(tuning_sequence)-1:
@@ -137,7 +158,7 @@ class AutoScanner():
 
                 response = self.na.get_pna_response()
                 if(response is None):
-                    print(f'VNA asleep!, trying again (attempt {attempt+1}/{total_retries})')
+                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
                     continue
                 else:
                     break
@@ -146,7 +167,12 @@ class AutoScanner():
                 responses = np.zeros((len(tuning_sequence)-1, len(response)))
             responses[i] = response
             if(self.hexstatus == 'stop'):
+                # undo step done just now
+                reverse_step = {k: -1*v for k, v in tuning_sequence[i].items()}
+                self.incremental_move(reverse_step)
                 break
+        if self.hexstatus == 'stop':
+            print('scan aborted because of collision!')
         self.hexstatus = 'stop'
         return responses, freqs
 
@@ -450,12 +476,11 @@ def main():
     plt.plot(freqs*1e-9, spec)
     '''
     
-    '''
-    r = 0.5
+    r = 2.2
     scan_one(auto, 'dY', -r, r, 0.1*r, plot=True,save=True)
     plt.show()
     exit()
-    '''
+    
 
     '''
     autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
