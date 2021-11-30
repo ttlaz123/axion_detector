@@ -171,10 +171,13 @@ class AutoScanner():
                 reverse_step = {k: -1*v for k, v in tuning_sequence[i].items()}
                 self.incremental_move(reverse_step)
                 break
+
+        collision = False
         if self.hexstatus == 'stop':
             print('scan aborted because of collision!')
+            collision = True
         self.hexstatus = 'stop'
-        return responses, freqs
+        return responses, freqs, collision
 
 def generate_single_axis_seq(coord, incr, start, end):
     '''
@@ -234,7 +237,12 @@ def scan_one(auto, coord, start, end, incr, plot=True, save=True):
     start_pos[2] = auto.pos.get_position()
 
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
-    responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+    responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
+
+    if collision:
+        auto.webhook.send(f"COLLISION! Scan of {coord} aborted.")
+        exit()
+
     if plot:
         plt.figure(figsize=[8,6])
         plot_tuning(responses, freqs, start_pos, coord, start, end)
@@ -257,7 +265,12 @@ def scan_many(auto, coords, starts, ends, incrs, plot=True, save=True):
     mode_maps = None # (coord numbr, responses)
     for i in range(len(coords)):
         seq = generate_single_axis_seq(coord=coords[i], incr=incrs[i], start=starts[i], end=ends[i])
-        responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+        responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
+
+        if collision:
+            auto.webhook.send(f"COLLISION! Scan of {coords[i]} aborted.")
+            exit()
+
         if plot:
             plt.figure(figsize=[12,10])
             plot_tuning(responses, freqs, start_pos, coords[i], starts[i], ends[i])
@@ -296,7 +309,12 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
             exit(err)
         
         seq = generate_single_axis_seq(coord=coords[0], incr=incrs[0], start=starts[0], end=ends[0])
-        responses, freqs = auto.tuning_scan_safety(seq, delay=0.2)
+        responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
+
+        if collision:
+            auto.webhook.send("COLLISION! Scan aborted.")
+            exit()
+
         if(responses is not None):
             if plot:
                 plt.figure(figsize=[12,10])
