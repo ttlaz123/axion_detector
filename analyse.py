@@ -9,23 +9,24 @@ from scipy.optimize import curve_fit
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
     if len(responses.shape) == 1:
-        resp_fft =np.fft.rfft(responses)
+        resp_fft = np.fft.rfft(responses)
     else:
         resp_fft = np.fft.rfft(responses, axis=1)
 
     filted_fft = resp_fft.copy()
     if len(responses.shape) == 1:
-        filted_fft[harmon] = 0
-        filted_fft[2*harmon] = 0
+        filted_fft[harmon-1:harmon+2] = 0
+        filted_fft[2*harmon-1:2*harmon+2] = 0
     else:
-        filted_fft[:,harmon] = 0
-        filted_fft[:,2*harmon] = 0
+        filted_fft[:,harmon-1:harmon+2] = 0
+        filted_fft[:,2*harmon-1:2*harmon+2] = 0
+        filted_fft[:,:10] = 0
 
     filted_resp = np.fft.irfft(filted_fft, n=responses.shape[-1])
         
     if plot:
         plt.figure()
-        if len(reponses.shape) == 1:
+        if len(responses.shape) == 1:
             plt.plot(filted_fft)
         else:
             plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
@@ -103,7 +104,7 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     initial_prominence = 1
     subsequent_prominence = 0.4
     max_width = 100 * f_points/6401 # 6401 is the resolution this was tweaked at
-    search_range = search_range * f_points/6401 # this hasn't been tested. maybe do without this line.
+    search_range = int(search_range * f_points/6401) # this hasn't been tested. maybe do without this line.
     for i in range(N):
         if search_order == 'rev':
             n = N - 1 - i

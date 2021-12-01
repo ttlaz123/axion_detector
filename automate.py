@@ -108,7 +108,7 @@ class AutoScanner():
         hex: HexaChamber object
         tuning_sequence: list of dicts of step sizes (dX:val,dY:val,dZ,dU,dV,dW), you get it
         '''
-        danger_volts = 0.1
+        danger_volts = 0.1 # threshold below which contact is detected
         channel = 'ai0'
         taskno = 1
         timeout = None
@@ -430,19 +430,48 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
 
+def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
+    '''
+    Since Z is tuned over a wide range, we want to autoalign on each step.
+    Since the frequency of the fundamental will shift as we adjust Z, we need to be smart about
+    where we look for it (that's why we need this special function)
+    '''
+
+    fftfilt_harmonic = 60
+    incr = (zf-zi)/N
+
+    freqs = auto.na.get_pna_freq()
+
+    responses = np.zeros((N, freqs.size))
+
+    indices_per_ghz = freqs.size / ((freqs[-1]-freqs[0])*1e-9)
+    last_fund_loc = 0
+    inds_below = 1000
+    inds_above = 300
+
+    # for each step until N
+        # determine the range you should look for the fund in
+        # autoalign limiting to that range (inefficient... could try only asking for the data you use)
+        # remember where the fund is when aligned
+        # take a spectrum
+
+    # save, plot, etc.
+
+
 def read_spectrum(auto, harmon=None, save=True, plot=False):
 
     freqs = auto.na.get_pna_freq()
 
     if harmon is not None:
         response = np.vstack((auto.na.get_pna_response(), np.zeros(len(freqs))))
-        response = analyse.fft_cable_ref_filter(response, harmon=harmon)[0]
+        response = analyse.fft_cable_ref_filter(response, harmon=harmon, plot=plot)[0]
     else:
         response = auto.na.get_pna_response()
 
     Zpos = auto.pos.get_position()
 
     if plot:
+        plt.figure()
         plt.plot(freqs,response, label=Zpos)
     if save:
         data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
@@ -494,16 +523,16 @@ def main():
     plt.plot(freqs*1e-9, spec)
     '''
     
+    '''
     r = 2.2
     scan_one(auto, 'dY', -r, r, 0.1*r, plot=True,save=True)
     plt.show()
     exit()
-    
-
     '''
+    
     autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     webhook.send('Autoalign complete.')
-    '''
+    
 
     '''
     coords = np.array(['dX', 'dV'])
