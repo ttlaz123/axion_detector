@@ -332,7 +332,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=60):
     '''
     Align automatically.
 
@@ -371,8 +371,8 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
             if starts[i] == 0:
                 # skip the coarse step for this coord
                 continue 
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind,stop_ind]
-            specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind:stop_ind]
+            specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
             fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
             param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
             coarse_align_pos = param_vals[np.argmax(fund_inds)]
@@ -409,8 +409,11 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind,stop_ind]
-            specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            print(raw_responses.shape)
+            print(start_ind, stop_ind)
+            raw_responses = raw_responses[:,start_ind:stop_ind]
+            specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
             tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
@@ -427,10 +430,13 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         iter += 1
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
+        auto.webhook.send('Autoalign FAILED, exiting')
+        exit(-1)
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
+        auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
 
-def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
+def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
     '''
     Since Z is tuned over a wide range, we want to autoalign on each step.
     Since the frequency of the fundamental will shift as we adjust Z, we need to be smart about
@@ -443,10 +449,11 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     incr = (zf-zi)/N
 
     freqs = auto.na.get_pna_freq()
+    freqs_ghz = freqs*1e-9
 
     responses = np.zeros((N, freqs.size))
 
-    indices_per_ghz = freqs.size / ((freqs[-1]-freqs[0])*1e-9)
+    indices_per_ghz = freqs.size / ((freqs_ghz[-1]-freqs_ghz[0]))
     # all in frequency, GHz (doesn't change with resolution)
     autoalign_domain_r = 0.05
 
@@ -454,8 +461,8 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     # to predict where the fundamental will be next
     # these values must be measured. don't even think can be automated (easily)
     Zs = np.array([10.4, 18.5, 34.7, 42.8, 50.9, 63.05, 71.15])
-    freqs = [7.7394, 7.6991, 7.6189, 7.5818, 7.5410, 7.4833, 7.4441]
-    p = np.polynomial.polynomial.Polynomial.fit(Zs,freqs,1)
+    freq_points = [7.7394, 7.6991, 7.6189, 7.5818, 7.5410, 7.4833, 7.4441]
+    p = np.polynomial.polynomial.Polynomial.fit(Zs,freq_points,1)
     # note: the fit is good but print(p)'s coeffs don't make sense
 
     # for autoalign
@@ -465,6 +472,10 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     align_fine_ranges = np.array([0.02,0.1,0.05,0.05])
     align_search_orders = ['fwd','rev','fwd','fwd']
 
+    # decide when to autoalign based on align_count
+    # want to space them out in the middle and do one at the beginning
+    align_iters = np.linspace(0,N,align_count+1, dtype=int)[:-1]
+
     auto.pos.incremental_move(zi)
 
     # for i in range N
@@ -473,15 +484,21 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
         # take a spectrum
 
     for i in range(N):
-        # get range to autoalign in
-        Z = auto.pos.get_posiiton()
-        ind_center = int(indices_per_ghz * p(Z))
-        ind_r = int(indices_per_ghz * autoalign_domain_r)
-        start_ind = ind_center - ind_r
-        stop_ind = ind_center + ind_r
 
-        # could try setting skip_coarse = True here to see if it still works
-        autoalign(auto, align_coords, align_margins, align_coarse_ranges, align_fine_ranges, start_ind=start_ind, stop_ind=stop_ind)
+        if i in align_iters:
+            # get range to autoalign in
+            Z = auto.pos.get_position()
+            ind_center = int(indices_per_ghz * (p(Z) - freqs_ghz[0]))
+            ind_r = int(indices_per_ghz * autoalign_domain_r)
+            start_ind = ind_center - ind_r
+            stop_ind = ind_center + ind_r
+
+            skip_coarse = False
+            if Z < 30:
+                skip_coarse=True # not enough range of motion anyway
+
+            # could try setting skip_coarse = True here to see if it still works
+            autoalign(auto, align_coords, align_margins, align_coarse_ranges, align_fine_ranges, start_ind=start_ind, stop_ind=stop_ind, skip_coarse=skip_coarse, plot_coarse=True, plot_fine=True)
 
         freqs, response = read_spectrum(auto, harmon=60)
 
@@ -493,7 +510,7 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
         plt.figure(figsize=[8,6])
         plot_tuning(responses, freqs, [-1]*6, 'dZ', zi, zf)
     if save:
-        save_tuning(responses, freqs, [-1]*6], 'dZ', zi, zf)
+        save_tuning(responses, freqs, [-1]*6, 'dZ', zi, zf)
 
     # [-1]*6 for start pos since autoaligned each time so no good answer
     
@@ -503,21 +520,37 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     # save, plot, etc.
 
 
-def read_spectrum(auto, harmon=None, save=True, plot=False):
+def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
     freqs = auto.na.get_pna_freq()
 
+    if complex:
+        pna_func = auto.na.get_pna_complex_response
+    else:
+        pna_func = auto.na.get_pna_response
+
     if harmon is not None:
-        response = np.vstack((auto.na.get_pna_response(), np.zeros(len(freqs))))
+        response = np.vstack((pna_func(), np.zeros(len(freqs))))
         response = analyse.fft_cable_ref_filter(response, harmon=harmon, plot=plot)[0]
     else:
-        response = auto.na.get_pna_response()
+        response = pna_func()
+
+    print(freqs)
+    print(response)
 
     Zpos = auto.pos.get_position()
 
     if plot:
         plt.figure()
-        plt.plot(freqs,response, label=Zpos)
+        if complex:
+            plt.figure()
+            plt.title("MAG")
+            plt.plot(freqs, np.log10(np.abs(response)))
+            plt.figure()
+            plt.title("PHASE")
+            plt.plot(freqs, np.angle(response))
+        else:
+            plt.plot(freqs,response, label=Zpos)
     if save:
         data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
         now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
@@ -551,10 +584,12 @@ def main():
 
     auto = AutoScanner(hexa, pos, na, webhook)
     
+    '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.1, -0.2, -0.6, -0.1, -0.1])
     ends = -1*starts
     incrs = 0.005*ends
+    '''
     
     '''
     freqs = auto.na.get_pna_freq()
@@ -600,17 +635,17 @@ def main():
     auto.pos.incremental_move(-5)
     '''
     
-    
+    '''
     coord = 'dZ'
     start = 0
     end = 91.4 - 10.4
     incr = end/500
     scan_one(auto, coord, start, end, incr, plot=True, save=True)
-    
+    '''
 
-    #read_spectrum(auto, harmon=None, save=True, plot=True)
+    #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)
 
-    #wide_z_scan(auto, 0, 91.4 - 10.4, 20, plot=True)
+    wide_z_scan(auto, 0, 91.4 - 10.4, 20, 3, plot=True)
 
     #plt.legend()
     plt.show()

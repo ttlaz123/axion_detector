@@ -8,6 +8,8 @@ from scipy.optimize import curve_fit
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
+    print(responses)
+
     if len(responses.shape) == 1:
         resp_fft = np.fft.rfft(responses)
     else:

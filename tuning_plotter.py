@@ -93,11 +93,13 @@ def plot_dir_with_spectra(spec_dir):
         
     plt.legend(fontsize=15)
 
-def plot_single_spectrum(fname, start=0, end=-1):
+def plot_Q_fit(fname, s=0, e=-1):
     freqs, response = np.load(f'{data_dir}{fname}')
 
+    '''
     s = 2950
     e=3125
+    '''
 
     freqs = freqs[s:e]
 
@@ -113,6 +115,8 @@ def plot_single_spectrum(fname, start=0, end=-1):
     plt.ylabel('S11 (dB)')
     plt.xlabel('Frequency (GHz)')
     plt.legend()
+
+
 
 
 if __name__ == '__main__':
@@ -135,7 +139,30 @@ if __name__ == '__main__':
 
     for i, fname in enumerate(fnames):
 
-        freqs, responses, start_pos, coord, start, end = load_tuning(fname)
+        freqs, response = np.load(f'{data_dir}{fname}')
+
+        print(response)
+
+        TD = np.fft.ifft(response)
+
+
+        vp = 0.66 * 3e8 # m/s
+        dnu = (freqs[-1] - freqs[0])/freqs.size # 1/s
+        max_t = 1/dnu # s
+        max_d = max_t * vp # m
+
+        distances = np.linspace(0, max_d, freqs.size)
+
+        plt.plot(distances,np.log10(np.abs(TD)), 'k')
+        plt.xlabel("Distance (m)")
+        plt.ylabel("S11 log mag")
+
+
+
+        plt.show()
+        continue
+
+        #freqs, responses, start_pos, coord, start, end = load_tuning(fname)
         cal_data = np.load(f"{data_dir}{cal_file}")[1:]
 
         if i > 0:
@@ -167,7 +194,7 @@ if __name__ == '__main__':
         '''
 
         plt.figure(figsize=(12,8))
-        plot_tuning(specs, freqs, start_pos, coord, start, end)
+        #plot_tuning(specs, freqs, start_pos, coord, start, end)
 
         '''
         plt.figure()

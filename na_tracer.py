@@ -117,15 +117,13 @@ class NetworkAnalyzer:
 
     def get_pna_response(self):
         str_res = self.send_command(["CALC:DATA? FDATA"])
-        if(str_res is None):
-            return
         return np.array(str_res.split(','), dtype=float)
 
     def get_pna_complex_response(self):
-        str_res = self.send_command(["CALC:DATA? CDATA"])
-        if(str_res is None):
-            return
-        return np.array(str_res.split(','), dtype=float)
+        str_res = self.send_command(["CALC:DATA? SDATA"])
+        raw_numbers = np.array(str_res.split(','), dtype=float)
+        complex_numbers = raw_numbers[::2] + raw_numbers[1::2]*1j
+        return complex_numbers
 
 
 def format_trace4(string_result):
