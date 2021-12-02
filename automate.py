@@ -332,17 +332,17 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1):
     '''
     Align automatically.
 
     takes a list of parameters, and the error margin to align to, and a max_iters
     '''
 
-    # While not out of iters,
-        # For each param, from most to least impactful:
-            # make a scan of a few (~20?) points on param axis
-            # fit maximum frequency point of fundamental (quadratic? Hyperbola?)
+    # While not above max_iters,
+        # For each param:
+            # make a scan of N points on param axis
+            # fit maximum frequency point of fundamental (quadratic)
             # move to that minimum
         # if all params in margin, break
 
@@ -371,7 +371,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
             if starts[i] == 0:
                 # skip the coarse step for this coord
                 continue 
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind,stop_ind]
             specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
             fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
             param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
@@ -409,7 +409,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind,stop_ind]
             specs = analyse.fft_cable_ref_filter(raw_responses, harmon=9)
             tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
@@ -435,6 +435,8 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     Since Z is tuned over a wide range, we want to autoalign on each step.
     Since the frequency of the fundamental will shift as we adjust Z, we need to be smart about
     where we look for it (that's why we need this special function)
+
+    note intial (zi) and final (zf) positions are relative to positioner's location when starting
     '''
 
     fftfilt_harmonic = 60
@@ -445,15 +447,58 @@ def wide_z_scan(auto, zi, zf, N, plot=False, save=True):
     responses = np.zeros((N, freqs.size))
 
     indices_per_ghz = freqs.size / ((freqs[-1]-freqs[0])*1e-9)
-    last_fund_loc = 0
-    inds_below = 1000
-    inds_above = 300
+    # all in frequency, GHz (doesn't change with resolution)
+    autoalign_domain_r = 0.05
 
-    # for each step until N
+    # fit line to freq evolution of fundamental as a fct of Z
+    # to predict where the fundamental will be next
+    # these values must be measured. don't even think can be automated (easily)
+    Zs = np.array([10.4, 18.5, 34.7, 42.8, 50.9, 63.05, 71.15])
+    freqs = [7.7394, 7.6991, 7.6189, 7.5818, 7.5410, 7.4833, 7.4441]
+    p = np.polynomial.polynomial.Polynomial.fit(Zs,freqs,1)
+    # note: the fit is good but print(p)'s coeffs don't make sense
+
+    # for autoalign
+    align_coords = ['dX', 'dY', 'dV', 'dW']
+    align_margins = [0.005,0.005, 0.005,0.005]
+    align_coarse_ranges = np.array([0.1,0.3,0.1,0.1])
+    align_fine_ranges = np.array([0.02,0.1,0.05,0.05])
+    align_search_orders = ['fwd','rev','fwd','fwd']
+
+    auto.pos.incremental_move(zi)
+
+    # for i in range N
         # determine the range you should look for the fund in
         # autoalign limiting to that range (inefficient... could try only asking for the data you use)
-        # remember where the fund is when aligned
         # take a spectrum
+
+    for i in range(N):
+        # get range to autoalign in
+        Z = auto.pos.get_posiiton()
+        ind_center = int(indices_per_ghz * p(Z))
+        ind_r = int(indices_per_ghz * autoalign_domain_r)
+        start_ind = ind_center - ind_r
+        stop_ind = ind_center + ind_r
+
+        # could try setting skip_coarse = True here to see if it still works
+        autoalign(auto, align_coords, align_margins, align_coarse_ranges, align_fine_ranges, start_ind=start_ind, stop_ind=stop_ind)
+
+        freqs, response = read_spectrum(auto, harmon=60)
+
+        if i == 0:
+            responses = np.zeros((N, len(response)))
+        responses[i] = response
+
+    if plot:
+        plt.figure(figsize=[8,6])
+        plot_tuning(responses, freqs, [-1]*6, 'dZ', zi, zf)
+    if save:
+        save_tuning(responses, freqs, [-1]*6], 'dZ', zi, zf)
+
+    # [-1]*6 for start pos since autoaligned each time so no good answer
+    
+    auto.webhook.send(f"Wide dZ scan COMPLETE")
+    
 
     # save, plot, etc.
 
@@ -478,6 +523,8 @@ def read_spectrum(auto, harmon=None, save=True, plot=False):
         now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
         fname = f"{data_dir}{now_str}_zoomed_{Zpos}Z"
         np.save(fname, np.vstack((freqs,response)))
+
+    return freqs, response
     
 
 def main():
@@ -529,10 +576,12 @@ def main():
     plt.show()
     exit()
     '''
-    
+
+
+    '''
     autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     webhook.send('Autoalign complete.')
-    
+    '''
 
     '''
     coords = np.array(['dX', 'dV'])
@@ -551,13 +600,17 @@ def main():
     auto.pos.incremental_move(-5)
     '''
     
-    '''
+    
     coord = 'dZ'
-    start = -1
-    end = -1*start
-    incr = 0.005*end
+    start = 0
+    end = 91.4 - 10.4
+    incr = end/500
     scan_one(auto, coord, start, end, incr, plot=True, save=True)
-    '''
+    
+
+    #read_spectrum(auto, harmon=None, save=True, plot=True)
+
+    #wide_z_scan(auto, 0, 91.4 - 10.4, 20, plot=True)
 
     #plt.legend()
     plt.show()

@@ -131,17 +131,21 @@ if __name__ == '__main__':
     data_dir = args.data_dir
     fnames = args.fnames
 
+    cal_file = "2021-12-01-15-24-12_short_6.5_to_8.5.npy"
+
     for i, fname in enumerate(fnames):
 
         freqs, responses, start_pos, coord, start, end = load_tuning(fname)
-        
+        cal_data = np.load(f"{data_dir}{cal_file}")[1:]
+
         if i > 0:
             plt.figure()
 
         N = responses.shape[0]
         incr = (end-start)/N
 
-        specs = analyse.fft_cable_ref_filter(responses, harmon=64)
+        specs = analyse.fft_cable_ref_filter(responses, harmon=60, plot=False)
+        #specs = responses - cal_data
 
         coord_num = np.where(coord == np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']))[0]
         
@@ -164,8 +168,13 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(12,8))
         plot_tuning(specs, freqs, start_pos, coord, start, end)
+
+        '''
         plt.figure()
         plot_tuning(responses, freqs, start_pos, coord, start, end)
+        plt.figure()
+        plot_tuning(np.ones_like(specs)*cal_data, freqs, start_pos, coord, start, end)
+        '''
 
     '''
     data=np.load(f"{data_dir}{fnames[0]}")

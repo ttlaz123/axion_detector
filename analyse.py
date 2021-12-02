@@ -104,7 +104,7 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     initial_prominence = 1
     subsequent_prominence = 0.4
     max_width = 100 * f_points/6401 # 6401 is the resolution this was tweaked at
-    search_range = int(search_range * f_points/6401) # this hasn't been tested. maybe do without this line.
+    search_range = int(search_range * f_points/6401)
     for i in range(N):
         if search_order == 'rev':
             n = N - 1 - i
