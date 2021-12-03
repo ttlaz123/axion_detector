@@ -117,6 +117,25 @@ def plot_Q_fit(fname, s=0, e=-1):
     plt.legend()
 
 
+def plot_TDR(fname, calibration=0.53):
+    # calibratoin found by dividing known cable length by measured cable length with it = 1
+    freqs, response = np.load(f'{data_dir}{fname}')
+
+    TD = np.fft.ifft(response)
+
+    calibration = 0.53 
+
+    vp = 0.66 * 3e8 # m/s (guess. could look up for specific cable)
+    dnu = (freqs[-1] - freqs[0])/freqs.size # 1/s
+    max_t = 1/dnu # s
+    max_d = max_t * vp # m
+
+    distances = np.linspace(0, max_d, freqs.size)
+
+    plt.plot(distances,np.log10(np.abs(TD)), 'k')
+    plt.xlabel("Distance (m)")
+    plt.ylabel("S11 log mag")
+
 
 
 if __name__ == '__main__':
@@ -139,30 +158,7 @@ if __name__ == '__main__':
 
     for i, fname in enumerate(fnames):
 
-        freqs, response = np.load(f'{data_dir}{fname}')
-
-        print(response)
-
-        TD = np.fft.ifft(response)
-
-
-        vp = 0.66 * 3e8 # m/s
-        dnu = (freqs[-1] - freqs[0])/freqs.size # 1/s
-        max_t = 1/dnu # s
-        max_d = max_t * vp # m
-
-        distances = np.linspace(0, max_d, freqs.size)
-
-        plt.plot(distances,np.log10(np.abs(TD)), 'k')
-        plt.xlabel("Distance (m)")
-        plt.ylabel("S11 log mag")
-
-
-
-        plt.show()
-        continue
-
-        #freqs, responses, start_pos, coord, start, end = load_tuning(fname)
+        freqs, responses, start_pos, coord, start, end = load_tuning(fname)
         cal_data = np.load(f"{data_dir}{cal_file}")[1:]
 
         if i > 0:

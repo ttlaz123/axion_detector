@@ -332,7 +332,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=60):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=9):
     '''
     Align automatically.
 
@@ -612,11 +612,9 @@ def main():
     exit()
     '''
 
-
-    '''
     autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     webhook.send('Autoalign complete.')
-    '''
+    
 
     '''
     coords = np.array(['dX', 'dV'])
@@ -645,7 +643,7 @@ def main():
 
     #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)
 
-    wide_z_scan(auto, 0, 91.4 - 10.4, 20, 3, plot=True)
+    #wide_z_scan(auto, 0, 91.4 - 10.4, 20, 3, plot=True)
 
     #plt.legend()
     plt.show()
