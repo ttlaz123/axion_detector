@@ -612,8 +612,8 @@ def main():
     exit()
     '''
 
-    autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.3,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
-    webhook.send('Autoalign complete.')
+    #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
+    #webhook.send('Autoalign complete.')
     
 
     '''
@@ -633,13 +633,13 @@ def main():
     auto.pos.incremental_move(-5)
     '''
     
-    '''
+    
     coord = 'dZ'
-    start = 0
-    end = 91.4 - 10.4
-    incr = end/500
+    start = -10
+    end = 10
+    incr = end/300
     scan_one(auto, coord, start, end, incr, plot=True, save=True)
-    '''
+    
 
     #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)
 
