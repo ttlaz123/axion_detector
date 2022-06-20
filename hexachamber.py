@@ -32,6 +32,9 @@ class HexaChamber:
     RCCW = 'u'
     RCW = 'o'
 
+    PZ = '1'
+    MZ = '2'
+
     ZERO = '0'
 
     def __init__(self, host, 
@@ -277,7 +280,16 @@ class HexaChamber:
             if(verbose):
                 print('Rotating Clockwise...')
             self.incremental_move(dW=-self.velocity, debug=debug)    
-  
+        elif(pressed_key == HexaChamber.PZ):
+            if(verbose):
+                print('Moving Plus Z...')
+            self.incremental_move(dZ=+self.velocity, debug=debug)    
+
+        elif(pressed_key == HexaChamber.MZ):
+            if(verbose):
+                print('Moving Minus Z...')
+            self.incremental_move(dZ=-self.velocity, debug=debug)   
+
         elif(pressed_key == HexaChamber.ZERO):
             if(verbose):
                 print('Centering hexapod...')
