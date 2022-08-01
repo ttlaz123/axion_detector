@@ -2,9 +2,11 @@ import os
 import pyvisa as pv 
 import matplotlib.pyplot as plt
 import time
+import math
 
 from scipy.optimize import curve_fit
 import numpy as np
+import analyse as ana
  
 
 class NetworkAnalyzer:
@@ -36,7 +38,7 @@ class NetworkAnalyzer:
             res = self.device.query(cmd)
         except pv.errors.VisaIOError:
             print('Response not received')
-            return 
+            res = '' 
 
         print('Response Received')
         return res 
@@ -92,11 +94,13 @@ class NetworkAnalyzer:
 
     def print_pna_trace(self, position=None, fig=None, ax=None):
         responses = self.get_pna_response()
+        #filt_responses = ana.fft_cable_ref_filter(responses)
         freqs = self.get_pna_freq()
+        
         coefficients = fit_skewedLorentzian(freqs,responses)
         print(coefficients)
         fig, ax = plot_trace(freqs, responses, position,fit=coefficients)#,fig=fig, ax=ax)
-        return fig, ax 
+        return fig, ax, responses, freqs
 
 
     def get_pna_freq(self):
@@ -184,8 +188,53 @@ def fit_skewedLorentzian(f,mag):
 
     return popt
 
+def skewed_lorentzian_sined(x,bkg,bkg_slp,offset,period,amplitude,skw,mintrans,res_f,Q):
+   term1 = bkg 
+   term2 = bkg_slp*(x-res_f)
+   #term4 = np.sin((x-offset)*period)*amplitude
+   term4 = 0
+   numer = (mintrans+skw*(x-res_f))
+   denom = (1+4*Q**2*((x-res_f)/res_f)**2)
+   term3 = numer/denom
+   return term1 + term2 + term4 - term3
 
 
+def fit_skewedLorentzian_sined(f,mag):
+    if(isinstance(f, list)):
+        f=np.array(f)
+    if(isinstance(mag, list)):
+        mag = np.array(mag)
+    if(np.mean(mag) < 0):
+        mag = -mag
+    # define the initial values
+
+    bkg = (mag[0]+mag[-1])/2
+    bkg_slp = (mag[-1]-mag[0])/(f[-1]-f[0])
+    skw = 0
+
+    amplitude = max(mag) - bkg
+    offset = 0
+    period = 0.3
+
+    mintrans = bkg-mag.min()
+    res_f = f[mag.argmin()]
+
+    Q = 1e4
+
+    low_bounds = [bkg/2,-1e-3,-1,0,f[0],1e2]
+    up_bounds = [bkg*2,1e-3,1,30,f[-1],1e5]
+
+    try:
+        popt,pcov = curve_fit(skewed_lorentzian_sined,f,mag,p0=[bkg,bkg_slp,offset,period,amplitude,skw,mintrans,res_f,Q],method='lm')
+        
+        #if popt[5]<0:
+        #    popt,pcov = curve_fit(skewedLorentzian,f,mag,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],bounds=(low_bounds,up_bounds))
+        #    print('Using bounded curve_fit')
+        
+    except RuntimeError:
+        popt=np.zeros((6,))
+
+    return popt
     
 
 def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner', folder='spectra', fig=None, ax=None):
@@ -193,6 +242,7 @@ def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner
         fig, ax = plt.subplots(1,1)
     ax.plot(xs, ys, label='Positioner at ' + str(position) + ' mm', linewidth=3)
     if(fit is not None):
+        #skewed_lorentzian = [-skewedLorentzian(x, fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]) for x in xs]
         skewed_lorentzian = [-skewedLorentzian(x, fit[0], fit[1], fit[2], fit[3], fit[4], fit[5]) for x in xs]
         ax.plot(xs, skewed_lorentzian, label='Fit at ' + str(position) + ' mm, Q=' + str(abs(fit[5])), linewidth=2)
     ax.set_xlabel('Frequency (Hz)')

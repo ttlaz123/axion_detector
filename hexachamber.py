@@ -328,9 +328,11 @@ class HexaChamber:
         tright_cmd = 'Tilt Hexapod Right: ' + HexaChamber.TRIGHT
         rccw_cmd = 'Rotate Hexapod Counter Clockwise: ' + HexaChamber.RCCW 
         rcw_cmd = 'Rotate Hexapod Clockwise: ' + HexaChamber.RCW
+        z_cmd = 'Move Hexapod Up: ' + HexaChamber.PZ 
+        zm_cmd = 'Move Hexapod Down: ' + HexaChamber.MZ 
         zero_cmd = 'Zeros all coordinates on Hexapod: ' + HexaChamber.ZERO 
 
         cmd = '\n'.join([down_cmd, up_cmd, left_cmd, right_cmd, 
                         tfor_cmd, tback_cmd, tleft_cmd, tright_cmd, 
-                        rccw_cmd, rcw_cmd, zero_cmd])
+                        rccw_cmd, rcw_cmd, z_cmd, zm_cmd, zero_cmd])
         return cmd

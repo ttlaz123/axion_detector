@@ -112,6 +112,7 @@ class Positioner:
             pos = self.newportxps.get_stage_position(self.stage_name)
         except AttributeError:
             print('XPS positioner not connected')
+            pos = None 
         return pos
 
     def set_incr(self, incr):

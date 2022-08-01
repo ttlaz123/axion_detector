@@ -227,20 +227,29 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
 def scan_one(auto, coord, start, end, incr, plot=True, save=True):
-    
+    '''
+    taj please comment your code
+    '''
     err,start_pos = auto.hexa.get_position()
     if err != 0:
         print(f'ERROR {err} with hexapod, exiting')
         auto.hexa.close()
     
         exit(err)
-    start_pos[2] = auto.pos.get_position()
+    
+    if(auto.pos is None):
+        start_pos[2] = -1
+    else:
+        start_pos[2] = auto.pos.get_position()
 
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
     responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
 
     if collision:
-        auto.webhook.send(f"COLLISION! Scan of {coord} aborted.")
+        if(auto.webhook is None):
+            print(f"COLLISION! Scan of {coord} aborted.")
+        else:
+            auto.webhook.send(f"COLLISION! Scan of {coord} aborted.")
         exit()
 
     if plot:
@@ -249,7 +258,10 @@ def scan_one(auto, coord, start, end, incr, plot=True, save=True):
     if save:
         save_tuning(responses, freqs, start_pos, coord, start, end)
     
-    auto.webhook.send(f"Scan of {coord} COMPLETE")
+    if(auto.webhook is None):
+        print(f"Scan of {coord} COMPLETE")
+    else:
+        auto.webhook.send(f"Scan of {coord} COMPLETE")
 
     return responses
 
@@ -268,7 +280,10 @@ def scan_many(auto, coords, starts, ends, incrs, plot=True, save=True):
         responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
 
         if collision:
-            auto.webhook.send(f"COLLISION! Scan of {coords[i]} aborted.")
+            if(auto.webhook is None):
+                print(f"COLLISION! Scan of {coords[i]} aborted.")
+            else:
+                auto.webhook.send(f"COLLISION! Scan of {coords[i]} aborted.")
             exit()
 
         if plot:
@@ -280,7 +295,10 @@ def scan_many(auto, coords, starts, ends, incrs, plot=True, save=True):
             mode_maps = np.zeros((len(coords),*responses.shape))
         mode_maps[i] = responses
 
-    auto.webhook.send(f"Scan of {coords} COMPLETE")
+    if(auto.webhook is None):
+        print(f"Scan of {coords} COMPLETE")
+    else:
+        auto.webhook.send(f"Scan of {coords} COMPLETE")
 
     return mode_maps
 
@@ -393,7 +411,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
 
         print(f'coarse alignment COMPLETE (deltas: {deltas})')
     else:
-        print('coarse alignmet SKIPPED')
+        print('coarse alignment SKIPPED')
 
     starts = -fine_ranges
     ends = -starts
@@ -430,11 +448,11 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         iter += 1
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
-        auto.webhook.send('Autoalign FAILED, exiting')
+        #auto.webhook.send('Autoalign FAILED, exiting')
         exit(-1)
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
-        auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+        #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
 
 def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
     '''
@@ -538,7 +556,10 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
     print(freqs)
     print(response)
 
-    Zpos = auto.pos.get_position()
+    if auto.pos is not None:
+        Zpos = auto.pos.get_position()
+    else:
+        Zpos = "UNKNOWN"
 
     if plot:
         plt.figure()
@@ -575,15 +596,28 @@ def main():
     print('****************************')
     password = args.pos_password
     IP = args.pos_ip
-
-    pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
-    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password,xps=pos.get_xps())
+    if(IP == 'x'):
+        pos = None
+    else:
+        pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
+    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)#,xps=pos.get_xps())
     na = na_tracer.NetworkAnalyzer()
 
-    webhook = Webhook.from_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
-
+    #webhook = Webhook.frhom_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
+    webhook = None
     auto = AutoScanner(hexa, pos, na, webhook)
+    """
+    freqs, resps = read_spectrum(auto, harmon=None, save=False, plot=False, complex=False)
+    resp_fft = np.fft.rfft(resps)
+    plt.plot(resp_fft)
+    plt.show()
+    """
+
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=15)
     
+    
+
+    exit()
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.1, -0.2, -0.6, -0.1, -0.1])
@@ -634,10 +668,10 @@ def main():
     '''
     
     
-    coord = 'dZ'
-    start = -10
-    end = 10
-    incr = end/300
+    coord = 'dV'
+    start = -0.25
+    end = 0.25
+    incr = end/20 #no. of steps will be twice denominator plus 2
     scan_one(auto, coord, start, end, incr, plot=True, save=True)
     
 

@@ -1,10 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 import tuning_plotter
 
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
+import argparse
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
@@ -14,7 +16,6 @@ def fft_cable_ref_filter(responses, harmon=9, plot=False):
         resp_fft = np.fft.rfft(responses)
     else:
         resp_fft = np.fft.rfft(responses, axis=1)
-
     filted_fft = resp_fft.copy()
     if len(responses.shape) == 1:
         filted_fft[harmon-1:harmon+2] = 0
@@ -34,6 +35,7 @@ def fft_cable_ref_filter(responses, harmon=9, plot=False):
             plt.imshow(np.abs(filted_fft), aspect='auto', interpolation='none', vmax=1e4)
             plt.colorbar()
 
+        plt.show()
     return filted_resp
 
 def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
@@ -43,6 +45,8 @@ def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     denom = (1+4*Q**2*((x-res_f)/res_f)**2)
     term3 = numer/denom
     return term1 + term2 - term3
+
+
 
 def get_lorentz_fit(freqs, spec):
 
@@ -182,3 +186,53 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, search_rang
         plt.plot(freqs*1e-9,start_pos[coord_num]*np.ones_like(freqs), 'k--')
 
     return turning_point
+
+
+def test_function(filename):
+    '''
+    reads ashley's files
+    '''
+    with open(filename, 'r') as f:
+        y = f.readline().strip()
+        x = f.readline().strip()
+    y = y.split(',')
+    resp = y[1:-2]
+    resp = [float(r.strip()) for r in resp]
+
+    x = x.split(', ')
+    freq = x[1:-1]
+    freq = [float(r.strip()) for r in freq]
+
+    # plt.plot(freq, resp)
+    # plt.show()
+
+    filtered_resps = fft_cable_ref_filter(np.array(resp), harmon=5, plot=False)
+    filtered_resps = fft_cable_ref_filter(filtered_resps, harmon=6, plot=False)
+    time1 = str(time.time())
+    with open('C:/Users/FTS/source/repos/axion_detector/spectra/right_top_filtered.txt', 'w') as f:
+        f.write('Response (dB), ')
+        respo = ''
+        for i in filtered_resps:
+            respo+= str(i)
+            respo += ', '
+        f.write(respo)
+        f.write('\n Frequency (Hz), ')
+        frequ = ''
+        for j in freq:
+            frequ += str(j)
+            frequ += ', '
+        f.write(frequ)
+    plt.figure()
+    plt.plot(freq, filtered_resps)
+    plt.show()
+
+
+if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--filename', '-f', default=None, help="path/to/file")
+    
+    args = parser.parse_args()
+
+    
+    
+    test_function(args.filename)

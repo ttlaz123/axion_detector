@@ -16,6 +16,7 @@ import socket
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import analyse as ana 
 from datetime import datetime
 
 import msvcrt
@@ -24,6 +25,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import na_tracer
+
+#from automate import AutoScanner
 
 from positioner import Positioner
 from hexachamber import HexaChamber
@@ -48,6 +51,7 @@ CHANGE_HEX_INCREMENT = 'c'
 CHANGE_POS_INCREMENT = 'b'
 CHANGE_POS_VELOCITY = 'v'
 HELP = 'h'
+AUTOSCAN = 'm'
  
 def initialize_positioner(password, IP, username='Administrator', reinitialize=False):
     '''
@@ -145,8 +149,45 @@ def move_xps_machines(hex, pos):
             #position = pos.get_position()
             print('Printing Trace')
             position=80 # TODO fix this
-            fig, ax = na.print_pna_trace(position, fig=fig, ax=ax)
+            fig, ax, responses, freqs = na.print_pna_trace(position, fig=fig, ax=ax)
+            time0 = str(time.time())
+            with open('C:/Users/FTS/source/repos/axion_detector/spectra/Resonance VNA Data/Autoaligned/front_disks/'+str(time0)+'data.txt', 'w') as f:
+                f.write('Response (dB), ')
+                respo = ''
+                for i in responses:
+                    respo+= str(i)
+                    respo += ', '
+                f.write(respo)
+                f.write('\n Frequency (Hz), ')
+                freq = ''
+                for j in freqs:
+                    freq += str(j)
+                    freq += ', '
+                f.write(freq)
             print('Trace saved')
+
+           # saving the filtered response data
+            filtered_resps = ana.fft_cable_ref_filter(np.array(responses), harmon=6, plot=False)
+            filtered_resps = ana.fft_cable_ref_filter(filtered_resps, harmon=7, plot=True)
+            with open('C:/Users/FTS/source/repos/axion_detector/spectra/Resonance VNA Data/Autoaligned/front_disks/'+str(time0)+'_filtered_data.txt', 'w') as f:
+                f.write('Response (dB), ')
+                respo = ''
+                for i in filtered_resps:
+                    respo+= str(i)
+                    respo += ', '
+                f.write(respo)
+                f.write('\n Frequency (Hz), ')
+                freq = ''
+                for j in freqs:
+                    freq += str(j)
+                    freq += ', '
+                f.write(freq)
+            plt.figure()
+            plt.plot(freqs, filtered_resps)
+            plt.savefig('/Users/FTS/source/repos/axion_detector/spectra/Resonance VNA Data/Autoaligned/front_disks/'+str(time0)+'_fil.png')
+            plt.show()
+            print('Filtered trace saved')
+
 
         elif(pressed_key == CHANGE_DEBUG):
             debug = not debug
@@ -175,6 +216,18 @@ def move_xps_machines(hex, pos):
             x = input()
             velocity = pos.set_velocity(x)
             continue
+        elif(pressed_key == AUTOSCAN):
+            print('Automatically Aligning...')
+            auto =  AutoScanner(hex, pos, na_tracer)
+            align_coords = ['dX', 'dY', 'dV', 'dW']
+            align_margins = [0.005,0.005, 0.005,0.005]
+            align_coarse_ranges = np.array([0.1,0.3,0.1,0.1])
+            align_fine_ranges = np.array([0.02,0.1,0.05,0.05])
+            auto.autoalign(auto, align_coords, align_margins, align_coarse_ranges, align_fine_ranges)
+            
+
+            continue
+        
 
         
         if(hex_thread.is_alive()):
