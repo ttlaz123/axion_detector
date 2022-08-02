@@ -54,7 +54,7 @@ def auto_filter(response, plot=False):
         plt.plot(x, ffted)
         plt.plot(x[peaks], ffted[peaks], 'r.')
 
-def get_lowest_trough(response):
+def get_lowest_trough(freq, response):
     """
     Does peak finding and lorentz fitting to find the location of the lowest frequency
     peak in a single spectrum (for field mapping)
