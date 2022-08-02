@@ -38,6 +38,31 @@ def fft_cable_ref_filter(responses, harmon=9, plot=False):
         plt.show()
     return filted_resp
 
+def auto_filter(response, plot=False):
+    """
+    Does peak finding to automatically delete fourier modes associated with cable reflections
+    """
+
+    ffted = np.fft.fft(response)
+
+    peaks, properties = find_peaks(ffted, width=[0,10], height=100)
+
+    if plot:
+        plt.plot(response)
+        plt.figure()
+        x = np.arange(ffted.size)
+        plt.plot(x, ffted)
+        plt.plot(x[peaks], ffted[peaks], 'r.')
+
+def get_lowest_trough(response):
+    """
+    Does peak finding and lorentz fitting to find the location of the lowest frequency
+    peak in a single spectrum (for field mapping)
+    """
+
+    pass
+    
+
 def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     term1 = bkg 
     term2 = bkg_slp*(x-res_f)
