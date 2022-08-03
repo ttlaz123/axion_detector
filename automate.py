@@ -613,9 +613,10 @@ def main():
     plt.show()
     """
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=15)
-    
-    
+    freq = na.get_pna_freq()
+    _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
+
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
 
     exit()
     '''

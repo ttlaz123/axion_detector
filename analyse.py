@@ -38,29 +38,49 @@ def fft_cable_ref_filter(responses, harmon=9, plot=False):
         plt.show()
     return filted_resp
 
-def auto_filter(response, plot=False):
+def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     """
-    Does peak finding to automatically delete fourier modes associated with cable reflections
+    Calculates where the cable reflection peak should be based on 
+    the frequency range, and removes modes around there.
+
+    a: the proportionality constant between freq range and index in fft
+    of the cable reflection signal (measure this by looking at the fft,
+    and seeing which peak you need to remove to get rid of the refs. then
+    divide that ind by the span of the VNA for that measurement to get "a")
+    rng: number of indices to set to zero on each side of the target
     """
 
     ffted = np.fft.fft(response)
-
-    peaks, properties = find_peaks(ffted, width=[0,10], height=100)
+    ind = int(np.round((freq[-1]-freq[0])*a))
+    ffted[ind-rng:ind+rng] = 0
+    filted = np.fft.irfft(ffted)
 
     if plot:
         plt.plot(response)
+        plt.plot(filted)
         plt.figure()
-        x = np.arange(ffted.size)
-        plt.plot(x, ffted)
-        plt.plot(x[peaks], ffted[peaks], 'r.')
+        plt.plot(ffted)
 
-def get_lowest_trough(freq, response):
+    if return_harmon:
+        retval = (filted, ind)
+    else:
+        retval = filted
+    
+    return retval
+
+def get_lowest_trough(freq, response, prominence=5):
     """
     Does peak finding and lorentz fitting to find the location of the lowest frequency
     peak in a single spectrum (for field mapping)
     """
 
-    pass
+    filted = auto_filter(response)
+
+    peaks, properties = find_peaks(-1*filted, prominence=prominence)
+   # plt.plot(response)
+    #plt.plot(response[peaks], 'r.')
+    #plt.show()
+    return freq[peaks[0]]
     
 
 def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
