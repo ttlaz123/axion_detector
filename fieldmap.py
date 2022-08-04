@@ -111,6 +111,8 @@ def main():
     #             delta = pos - fid_f
     #             deltas[i,j,k] = delta
 
+    # test
+
     err, hexa_position = hexa.get_position()
     coord_names = ['X', 'Y', 'Z', 'U', 'V', 'W']
 
