@@ -50,16 +50,18 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     rng: number of indices to set to zero on each side of the target
     """
 
-    ffted = np.fft.fft(response)
+    ffted = np.fft.rfft(response)
     ind = int(np.round((freq[-1]-freq[0])*a))
     ffted[ind-rng:ind+rng] = 0
     filted = np.fft.irfft(ffted)
 
     if plot:
+        plt.figure()
         plt.plot(response)
+
         plt.plot(filted)
         plt.figure()
-        plt.plot(ffted)
+        plt.plot(np.abs(ffted))
 
     if return_harmon:
         retval = (filted, ind)
@@ -68,18 +70,15 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     
     return retval
 
-def get_lowest_trough(freq, response, prominence=5):
+def get_lowest_trough(freq, response, prominence=2):
     """
     Does peak finding and lorentz fitting to find the location of the lowest frequency
     peak in a single spectrum (for field mapping)
     """
 
-    filted = auto_filter(response)
-
+    filted = auto_filter(freq, response) #needs both freq and resp? not just resp?
     peaks, properties = find_peaks(-1*filted, prominence=prominence)
-   # plt.plot(response)
-    #plt.plot(response[peaks], 'r.')
-    #plt.show()
+
     return freq[peaks[0]]
     
 

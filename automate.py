@@ -373,7 +373,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     ends = -starts
     incrs = (ends-starts)/N
 
-    search_range_coarse = 200
+    search_range_coarse = 300
 
     aligned = np.array([False]*len(coords))
 
@@ -418,7 +418,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     incrs = (ends-starts)/N
     # iterate to find fine alignment
 
-    search_range_fine = 50
+    search_range_fine = 75
 
     phase_path = [[]*len(coords)]
 
@@ -435,6 +435,10 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
             tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
+
+            if plot_fine:
+                plt.show()
+
             if abs(delta) < margins[i]:
                 aligned[i] = True
             else:
@@ -443,8 +447,6 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
                 print(f'Adjusting {command}')
                 auto.hexa.incremental_move(**command)
 
-            if plot_fine:
-                plt.show()
         iter += 1
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
@@ -616,7 +618,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.1,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
 
     exit()
     '''
