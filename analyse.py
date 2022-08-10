@@ -70,16 +70,51 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     
     return retval
 
-def get_lowest_trough(freq, response, prominence=2):
+def get_lowest_trough(freq, response):
     """
     Does peak finding and lorentz fitting to find the location of the lowest frequency
     peak in a single spectrum (for field mapping)
     """
 
     filted = auto_filter(freq, response) #needs both freq and resp? not just resp?
-    peaks, properties = find_peaks(-1*filted, prominence=prominence)
 
-    return freq[peaks[0]]
+    freq_window = 0.0015*1e9 #measured val in GHz of about how wide half the peak is
+    freq_step = freq[1]-freq[0]
+    pts_window = int(np.round(freq_window / freq_step))
+
+    idx = response.argmin()
+    lorentz_freq = freq[idx - pts_window : idx + pts_window]
+    lorentz_resp = response[idx - pts_window : idx + pts_window]
+    '''
+    plt.figure()
+    plt.plot(freq, response)
+    plt.plot(lorentz_freq, lorentz_resp)
+    plt.show()
+    '''
+    res_f = freq[idx]
+
+    bkg = (response[0]+response[-1])/2
+    bkg_slp = (response[-1]-response[0])/(freq[-1]-freq[0])
+    skw = 0
+
+    mintrans = bkg-response.min()
+
+    Q = 1e4
+
+    popt, pcov = curve_fit(skewed_lorentzian,lorentz_freq,lorentz_resp,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
+
+    res = lorentz_resp - skewed_lorentzian(lorentz_freq, *popt)
+    '''
+    plt.subplot(211)
+    plt.plot(freq, response)
+    plt.plot(lorentz_freq, lorentz_resp)
+    plt.plot(freq, skewed_lorentzian(freq, *popt))
+    plt.subplot(212)
+    plt.plot(lorentz_freq, res, 'k')
+    plt.show()
+    '''
+
+    return popt[4]
     
 
 def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):

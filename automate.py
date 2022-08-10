@@ -373,7 +373,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     ends = -starts
     incrs = (ends-starts)/N
 
-    search_range_coarse = 300
+    search_range_coarse = 200
 
     aligned = np.array([False]*len(coords))
 
@@ -618,9 +618,8 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.1,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.1,0.05,0.05]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
 
-    exit()
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.1, -0.2, -0.6, -0.1, -0.1])
@@ -652,14 +651,16 @@ def main():
     #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     #webhook.send('Autoalign complete.')
     
-
     '''
-    coords = np.array(['dX', 'dV'])
-    starts = np.array([-0.1, -0.1])
+    # scan all
+    coords = np.array(['dX', 'dV', 'dW', 'dY','dU'])
+    starts = np.array([-0.2, -0.2, -0.2, -0.5, -0.2])
     ends = -1*starts
-    incrs = 0.1*ends
+    ns = np.array([10, 10, 10, 10, 10])
+    incrs = (ends - starts)/ns
+    
+    scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
     '''
-    #scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
 
     '''
     for i in range(5):
@@ -670,13 +671,13 @@ def main():
     auto.pos.incremental_move(-5)
     '''
     
-    
+    '''
     coord = 'dV'
     start = -0.25
     end = 0.25
     incr = end/20 #no. of steps will be twice denominator plus 2
     scan_one(auto, coord, start, end, incr, plot=True, save=True)
-    
+    '''
 
     #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)
 
