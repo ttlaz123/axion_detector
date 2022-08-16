@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = '/Users/AshleyDavidson/Downloads/1659648673'
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220810_140822.csv'
 
 
 def read_data(file):
@@ -42,9 +42,20 @@ def plot_deltas(deltas):
     #plt.savefig(f'field_mapping_plots\\rear_{filename}.png')
     plt.show()
 
+def plot_hists(deltas):
+    bin_edges = np.linspace(np.min(deltas), np.max(deltas), 10)
+    plt.figure()
+    plt.hist(deltas.flatten(), bins=bin_edges, label="total", edgecolor="black",lw = 3, fc=(0, 0, 0, 0.5))
+    plt.hist(deltas[0].flatten(), bins=bin_edges, label="front", edgecolor="black",lw = 3, fc=(0, 0, 1, 0.5))
+    plt.hist(deltas[1].flatten(), bins=bin_edges, label="back", edgecolor="black",lw = 3, fc=(1, 0, 0, 0.5))
+    plt.xlabel(f"$\\Delta f$ (Hz)")
+    plt.legend()
+    plt.show()
+
+
 def main():
     deltas = read_data(FILENAME)
-    plot_deltas(deltas)
+    plot_hists(deltas)
 
 if __name__ == '__main__':
     main()

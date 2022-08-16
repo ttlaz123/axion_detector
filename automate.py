@@ -226,7 +226,7 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
 
-def scan_one(auto, coord, start, end, incr, plot=True, save=True):
+def scan_one(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
     '''
     taj please comment your code
     '''
@@ -243,7 +243,7 @@ def scan_one(auto, coord, start, end, incr, plot=True, save=True):
         start_pos[2] = auto.pos.get_position()
 
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
-    responses, freqs, collision = auto.tuning_scan_safety(seq, delay=0.2)
+    responses, freqs, collision = auto.tuning_scan_safety(seq, delay=delay)
 
     if collision:
         if(auto.webhook is None):
@@ -350,7 +350,7 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
     
-def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=9):
+def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''
     Align automatically.
 
@@ -389,8 +389,12 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
             if starts[i] == 0:
                 # skip the coarse step for this coord
                 continue 
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind:stop_ind]
-            specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
+            raw_responses_with_bad_first_row = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)[:,start_ind:stop_ind]
+            raw_responses = raw_responses_with_bad_first_row
+            if harmon is not None:
+                specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
+            else:
+                specs = raw_responses
             fund_inds, skipped = analyse.get_fundamental_inds(specs,freqs,search_range=search_range_coarse, search_order=search_orders[i])
             param_vals = np.linspace(starts[i]+incrs[i]/2,ends[i]-incrs[i]/2,N+1) + start_pos[np.where(coord_lookup == coord)[0]]
             coarse_align_pos = param_vals[np.argmax(fund_inds)]
@@ -418,7 +422,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     incrs = (ends-starts)/N
     # iterate to find fine alignment
 
-    search_range_fine = 75
+    search_range_fine = 150
 
     phase_path = [[]*len(coords)]
 
@@ -427,11 +431,15 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            raw_responses_with_bad_first_row = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            raw_responses = raw_responses_with_bad_first_row[1:]
             print(raw_responses.shape)
             print(start_ind, stop_ind)
             raw_responses = raw_responses[:,start_ind:stop_ind]
-            specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
+            if harmon is not None:
+                specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
+            else:
+                specs = raw_responses
             tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
@@ -582,7 +590,6 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
     return freqs, response
     
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
@@ -614,11 +621,13 @@ def main():
     plt.plot(resp_fft)
     plt.show()
     """
-
+    
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.1,0.05,0.05]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    harmon = None
+    autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
 
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
@@ -672,11 +681,11 @@ def main():
     '''
     
     '''
-    coord = 'dV'
-    start = -0.25
-    end = 0.25
-    incr = end/20 #no. of steps will be twice denominator plus 2
-    scan_one(auto, coord, start, end, incr, plot=True, save=True)
+    coord = 'dX'
+    start = -0.01
+    end = -1*start
+    incr = end/10 #no. of steps will be twice denominator plus 2
+    scan_one(auto, coord, start, end, incr,plot=True, save=True)
     '''
 
     #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)

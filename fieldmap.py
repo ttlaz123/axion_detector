@@ -61,8 +61,8 @@ def main():
     fid_f /= N
 
     # number of points in each direction
-    resy = 3
-    resz = 3
+    resy = 5
+    resz = 5
 
     deltas = np.zeros((2,resz,resy)) #this is hardcoded for grid pattern
 
@@ -76,7 +76,7 @@ def main():
         for j in range(resz): #thought it might be better to not hardcode 3x3 pattern in case we want other patterns
             for k in range(resy):
                 #for each postiion, get the freq location and delta
-
+                
                 if i == 1 and j == 0 and k == 0:
                     input("Please move the front disk out of the way. (ENTER when done)")
                 
@@ -138,11 +138,11 @@ def main():
 
     np.savetxt(f'field_mapping_data\\{filename}.csv', np.hstack((fid_f, deltas.flatten())))
     
-    bin_edges = np.linspace(np.min(deltas), np.max(deltas), 10)
+    bin_edges = np.linspace(np.min(deltas), np.max(deltas), 20)
     plt.figure()
-    plt.hist(deltas.flatten(), bins=bin_edges, label="total", fc=(0, 0, 0, 0.5))
-    plt.hist(deltas[0].flatten(), bins=bin_edges, label="front", fc=(0, 0, 1, 0.5))
-    plt.hist(deltas[1].flatten(), bins=bin_edges, label="back", fc=(1, 0, 0, 0.5))
+    plt.hist(deltas.flatten(), bins=bin_edges, label="total", lw = 1, fc=(0, 0, 0, 0.5))
+    plt.hist(deltas[0].flatten(), bins=bin_edges, label="front", lw = 1, fc=(0, 0, 1, 0.5))
+    plt.hist(deltas[1].flatten(), bins=bin_edges, label="back", lw = 1, fc=(1, 0, 0, 0.5))
     plt.xlabel(f"$\\Delta f$ (Hz)")
     plt.legend()
     plt.savefig(f'field_mapping_plots\\hist_{filename}.png')
