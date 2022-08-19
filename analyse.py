@@ -186,9 +186,10 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     bounds_start = 0
     bounds_end = responses[0].size-1
 
-    initial_prominence = 0.6
-    subsequent_prominence = 0.4
-    max_width = 250 * f_points/6401 # 6401 is the resolution this was tweaked at
+    initial_prominence = 1.5
+    subsequent_prominence = 0.6
+    max_width = 200 * f_points/6401 # 6401 is the resolution this was tweaked at
+    wlen = 300 * f_points/6401 
     search_range = int(search_range * f_points/6401)
     for i in range(N):
         if search_order == 'rev':
@@ -199,7 +200,7 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
             prominence = initial_prominence
         else:
             prominence = subsequent_prominence
-        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence)
+        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence, wlen=wlen)
         
         if i == 0:
             metric = abs(peaks) # want leftmost peak for first row (min peak pos)

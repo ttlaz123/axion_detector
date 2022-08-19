@@ -422,7 +422,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     incrs = (ends-starts)/N
     # iterate to find fine alignment
 
-    search_range_fine = 150
+    search_range_fine = 200
 
     phase_path = [[]*len(coords)]
 
@@ -626,9 +626,10 @@ def main():
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.01, 0.01, 0.1, 0.01, 0.01], N=20, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=False, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     harmon = None
-    autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
-
+    #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=50, coarse_ranges=np.array([0.2,0.2,0.05,0.05]), fine_ranges=np.array([0.02,0.075,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    #autoalign(auto, ['dX'], [0.001], N=50, coarse_ranges=np.array([0.2]), fine_ranges=np.array([0.02]), skip_coarse=True, search_orders=['fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     '''
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.1, -0.2, -0.6, -0.1, -0.1])
