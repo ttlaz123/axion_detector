@@ -186,10 +186,12 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     bounds_start = 0
     bounds_end = responses[0].size-1
 
+    fspan = freqs[-1] - freqs[0]
+
     initial_prominence = 1.5
     subsequent_prominence = 0.6
-    max_width = 200 * f_points/6401 # 6401 is the resolution this was tweaked at
-    wlen = 300 * f_points/6401 
+    max_width = 200 * fspan/350e6 * f_points/6401 # 6401 is the resolution this was tweaked at
+    wlen = 300 * fspan/350e6 * f_points/6401 # 350 MHz is the zoom this was tweaked at
     search_range = int(search_range * f_points/6401)
     for i in range(N):
         if search_order == 'rev':
