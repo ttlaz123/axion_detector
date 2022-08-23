@@ -187,11 +187,12 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     bounds_end = responses[0].size-1
 
     fspan = freqs[-1] - freqs[0]
+    print(fspan)
 
-    initial_prominence = 1.5
-    subsequent_prominence = 0.6
-    max_width = 200 * fspan/350e6 * f_points/6401 # 6401 is the resolution this was tweaked at
-    wlen = 300 * fspan/350e6 * f_points/6401 # 350 MHz is the zoom this was tweaked at
+    initial_prominence = 0
+    subsequent_prominence = 0
+    max_width = 1000000 * fspan/350e6 * f_points/6401 # 6401 is the resolution this was tweaked at
+    #wlen = 1000000 * fspan/350e6 * f_points/6401 # 350 MHz is the zoom this was tweaked at
     search_range = int(search_range * f_points/6401)
     for i in range(N):
         if search_order == 'rev':
@@ -202,7 +203,7 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
             prominence = initial_prominence
         else:
             prominence = subsequent_prominence
-        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence, wlen=wlen)
+        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence)#, wlen=wlen)
         
         if i == 0:
             metric = abs(peaks) # want leftmost peak for first row (min peak pos)
@@ -220,6 +221,9 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
             fundamental_inds[n] = -1
             # can be smart about where next search range should be later
             # but there is danger in being too smart...
+
+            # put this in place for when zoomed in. Should only be used when zoomed to one resonance.
+            fundamental_inds[n] = np.argmin(responses[n])
             continue
         peak_num = np.argmin(metric)
         all_inds[n] = peaks + bounds_start
@@ -227,6 +231,9 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
         last_peak_pos = fundamental_inds[n]
         bounds_start = last_peak_pos - search_range
         bounds_end = last_peak_pos + search_range
+
+        # put this in place for when zoomed in. Should only be used when zoomed to one resonance.
+        fundamental_inds[n] = np.argmin(responses[n])
 
     # skip peak if not found
     skipped = np.where(fundamental_inds < 0)
@@ -243,6 +250,9 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     plt.plot(freqs[fundamental_inds[ind]], responses[ind][fundamental_inds[ind]], 'r.')
     plt.show()
     '''
+
+    print(fundamental_inds)
+
     return fundamental_inds, skipped
 
 def get_turning_point(responses, coord, start_pos, start, end, incr, search_range,freqs,plot=False):

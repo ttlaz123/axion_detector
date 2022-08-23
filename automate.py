@@ -102,7 +102,54 @@ class AutoScanner():
         else:
             self.pos.incremental_move(step['dZ'])
 
+    def absolute_move(self, step):
+        """
+        step: {"dX": position, "dY": position, Z, U, V, W..} (all coords required)
+
+        move all given coords to position (hexa only.)
+        """
+        print(f'Performing move: {step} ')
+
+        param_name = list(step.keys())[0]
+
+        self.hexa.absolute_move(**step, coord_sys="Work")
     
+    def tuning_scan_abs(self, tuning_sequence, delay=0.2):
+        '''
+        Execute a tuning scan with a sequence of absolute positions.
+        Meant to eliminate slips in X
+
+        Assumes no re-centering move at the end (as generate_single_axis_seq_abs doesn't make one)
+        '''
+
+        print('Starting scan...')
+
+        freqs = self.na.get_pna_freq()
+        responses = np.zeros((len(tuning_sequence), len(freqs)))
+
+        for i,step in enumerate(tuning_sequence):
+            
+            print(f'Iteration {i+1} of {len(tuning_sequence)}')
+
+            self.absolute_move(step)
+
+            time.sleep(delay)
+        
+            total_retries = 10
+            for attempt in range(total_retries):
+
+                response = self.na.get_pna_response()
+                if(response is None):
+                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
+                    continue
+                else:
+                    break
+
+            responses[i] = response
+
+        return responses, freqs
+
+
     def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=True, DATA_TYPE=''):
         '''
         hex: HexaChamber object
@@ -189,6 +236,26 @@ def generate_single_axis_seq(coord, incr, start, end):
     seq.insert(0, {coord:start})
     seq.append({coord:-end})
     return seq
+
+def generate_single_axis_seq_abs(coord, incr, start, end, full_pos):
+    '''
+    Generates the list of coordinates to move the hexapod 
+    seequence of absolute positions, not inceremental moves.
+    does not return to original position.
+
+    full pos is the full position of the hexapod that this sequence will tell the hexa to absolute move to, except the coord that changes. This is needed for absolute move.
+    full pos is a list, in coord_map order, as one would get from hexa.get_position()
+    '''
+    coord_map = {"X":0, "Y":1, "Z":2, "U":3, "V":4, "w":5}
+    coord_list = ["X", "Y", "Z", "U", "V", "W"]
+    num_moves = int(np.round((end-start)/incr))
+    positions = np.arange(start, end+incr, incr)
+    seq = [{}]*num_moves
+    for i in range(num_moves):
+        new_pos = full_pos
+        new_pos[coord_map[coord]] = positions[i]
+        seq[i] = {coord_list[j]:new_pos[j] for j in range(len(coord_list))}
+    return seq
  
 def tuning_scan(hexa, na, tuning_sequence, delay=15):
     '''
@@ -208,6 +275,17 @@ def tuning_scan(hexa, na, tuning_sequence, delay=15):
 
     return responses    
 
+def plot_tuning_abs(responses,freqs, start_pos, coord, start, end):
+
+    coords = np.array(['X', 'Y', 'Z', 'U', 'V', 'W'])
+    init_param = start_pos[np.where(coords==coord)][0]
+
+    freqs = freqs/10**9 # GHz
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.xlabel('Frequency [GHz]')
+    plt.ylabel(f'Tuning Parameter: {coord[-1]}')
+    plt.colorbar()
+
 def plot_tuning(responses,freqs, start_pos, coord, start, end):
 
     coords = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
@@ -225,6 +303,35 @@ def save_tuning(responses, freqs, start_pos, coord, start, end):
     fname = f"{now_str}_{start_pos[0]}X{start_pos[1]}Y{start_pos[2]}Z{start_pos[3]}U{start_pos[4]}V{start_pos[5]}W{start}i{end}f{coord}"
     print(f"Saving to: {data_dir}\\{fname}.npy")
     np.save(f"{data_dir}{fname}", np.vstack((freqs,responses)))
+
+def scan_one_abs(auto, coord, start, end, incr, delay=0.2, plot=False, save=False):
+    '''
+    takes autalign object, dof to scan (coord), start and end absolute position, and increment size.
+    '''
+    err,start_pos = auto.hexa.get_position()
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        auto.hexa.close()    
+        exit(err)
+
+    seq = generate_single_axis_seq_abs(coord=coord, incr=incr, start=start, end=end, full_pos=start_pos)
+    responses, freqs = auto.tuning_scan_abs(seq, delay=delay)
+
+    # must return to original pos
+    auto.absolute_move(pos_list_2_dict(start_pos))
+
+    if plot:
+        plt.figure(figsize=[8,6])
+        plot_tuning_abs(responses, freqs, start_pos, coord, start, end)
+    if save:
+        save_tuning(responses, freqs, start_pos, coord, start, end)
+
+    if(auto.webhook is None):
+        print(f"Scan of {coord} COMPLETE")
+    else:
+        auto.webhook.send(f"Scan of {coord} COMPLETE")
+    
+    return responses
 
 def scan_one(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
     '''
@@ -349,7 +456,18 @@ def scan_multialignment(auto, coords, starts, ends, incrs, plot=True, save_plots
     auto.hexa.incremental_move(**kwarg)
 
     auto.webhook.send(f"Multiscan of {coords} COMPLETE")
-    
+
+def pos_list_2_dict(pos_list):
+    """
+    lets you get from hexa.get_position() result to a dict to feed absolute_move()
+    """
+
+    coord_list = ["X", "Y", "Z", "U", "V", "W"]
+
+    pos_dict = {coord_list[i]:pos_list[i] for i in range(len(coord_list))}
+
+    return pos_dict
+
 def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''
     Align automatically.
@@ -380,7 +498,6 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     _, start_pos = auto.hexa.get_position()
 
     freqs = auto.na.get_pna_freq()
-
 
     if not skip_coarse:
         deltas = np.zeros(len(coords))
@@ -422,7 +539,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     incrs = (ends-starts)/N
     # iterate to find fine alignment
 
-    search_range_fine = 200
+    search_range_fine = 2000000 # 200
 
     phase_path = [[]*len(coords)]
 
@@ -440,7 +557,7 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
                 specs = analyse.fft_cable_ref_filter(raw_responses, harmon)
             else:
                 specs = raw_responses
-            tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i],search_range_fine, freqs, plot=plot_fine)     
+            tp = analyse.get_turning_point(specs, coord, start_pos, starts[i], ends[i], incrs[i], search_range_fine, freqs, plot=plot_fine)     
             delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {delta}")
 
@@ -621,13 +738,19 @@ def main():
     plt.plot(resp_fft)
     plt.show()
     """
+
+    _, hex_pos = auto.hexa.get_position()
+
+    X_now = hex_pos[0]
+
+    #scan_one_abs(auto, "X", X_now-0.02, X_now+0.02, 0.001, delay=1, plot=True, save=False)
     
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
-    autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.01, 0.01, 0.1, 0.01, 0.01], N=30, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=True, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     harmon = None
+    autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.0005, 0.0005, 0.005, 0.0005, 0.0005], N=50, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=True, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=50, coarse_ranges=np.array([0.2,0.2,0.05,0.05]), fine_ranges=np.array([0.02,0.075,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #autoalign(auto, ['dX'], [0.001], N=50, coarse_ranges=np.array([0.2]), fine_ranges=np.array([0.02]), skip_coarse=True, search_orders=['fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     '''
@@ -682,10 +805,10 @@ def main():
     '''
     
     '''
-    coord = 'dX'
-    start = -0.01
+    coord = 'dV'
+    start = -0.05
     end = -1*start
-    incr = end/10 #no. of steps will be twice denominator plus 2
+    incr = end/20 #no. of steps will be twice denominator plus 2
     scan_one(auto, coord, start, end, incr,plot=True, save=True)
     '''
 

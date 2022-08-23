@@ -175,7 +175,7 @@ class HexaChamber:
     def HexapodMoveAbsoluteCmd(self, GroupName=None, CoordinateSystem=None, 
                             X=0, Y=0, Z=0, U=0, V=0, W=0):
         '''
-        Comments here
+        Constructs command string to send to hexa for absiolute move.
         '''
         if(GroupName is None):
             GroupName = self.groupname
@@ -208,6 +208,18 @@ class HexaChamber:
         '''
         generated_command = self.HexapodMoveIncrementalCmd(CoordinateSystem=coord_sys,
                                     dX=dX, dY=dY, dZ=dZ, dU=dU, dV=dV, dW=dW)
+        if(debug):
+            print('        Socket: ' + str(self.sid))
+        err, msg = self.xps.Send(socketId=self.sid, cmd = generated_command)
+        return err, msg
+
+    def absolute_move(self, coord_sys='Work', X=None, Y=None, Z=None, U=None, V=None, W=None, debug=False):
+        '''
+        performs the actual absolute movement
+        must get an arg for every degree of freedom. Defaults to None to throw error instead of disaster
+        '''
+        generated_command = self.HexapodMoveAbsoluteCmd(CoordinateSystem=coord_sys,
+                                    X=X, Y=Y, Z=Z, U=U, V=V, W=W)
         if(debug):
             print('        Socket: ' + str(self.sid))
         err, msg = self.xps.Send(socketId=self.sid, cmd = generated_command)
