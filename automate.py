@@ -1,15 +1,3 @@
-# import stuff
-
-# generate instructions: axis, step size, number of steps (each way?)
-
-# loop n times:
-#   take data
-#   make incremental move
-# then return and loop the other way (-incremental move)
-
-# make plot
-
-
 import time, datetime
 import argparse
 import numpy as np
@@ -561,6 +549,59 @@ def pos_list_2_dict(pos_list):
     pos_dict = {coord_list[i]:pos_list[i] for i in range(len(coord_list))}
 
     return pos_dict
+
+def autoalign_fits(auto, coords, margins, ranges, N=20, max_iters=10, plot=False, save=True, fit_win=100):
+    '''
+    Align automatically, given you're zoomed in on a single resonance and the perturbations are small (no peak finding, only fitting).
+    Uses skewed loretzian magnitude fits with errors, and tags each one with the actual hexa position.
+
+    takes a list of parameters, and the error margin to align to, and a max_iters
+    fit_win tells you how far to look on either side of the min for fitting
+    '''
+    coord_lookup = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
+
+    aligned = np.array([False]*len(coords))
+
+    _, start_pos = auto.hexa.get_position()
+
+    freqs = auto.na.get_pna_freq()
+    starts = -ranges
+    ends = -starts
+    incrs = (ends-starts)/N
+
+    iter = 0
+    while iter < max_iters and np.any(aligned == False):
+        for i,coord in enumerate(coords):
+            err, start_pos = auto.hexa.get_position()
+            # can be expaned to different ranges for each coord.
+            raw_responses_with_bad_first_row = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            # I think the bad first row is a symptom of the skipping in X anyway. I think the other dofs are fine
+            raw_responses = raw_responses_with_bad_first_row[1:]
+
+            tp = analyse.get_turning_point_fits(specs, coord, start_pos, starts[i], ends[i], incrs[i], search_range_fine, freqs, plot=plot_fine)     
+            delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
+            print(f"{coord} tp at {tp}, delta of {delta}")
+
+            if plot_fine:
+                plt.show()
+
+            if abs(delta) < margins[i]:
+                aligned[i] = True
+            else:
+                aligned[i] = False
+                command = {coord:delta}
+                print(f'Adjusting {command}')
+                auto.hexa.incremental_move(**command)
+
+        iter += 1
+    if iter >= max_iters:
+        print('autoalignment FAILED, max iters reached')
+        #auto.webhook.send('Autoalign FAILED, exiting')
+        exit(-1)
+    else:
+        print(f'autoalignment SUCCESS after {iter} iterations')
+        #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+
 
 def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''

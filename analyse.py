@@ -184,6 +184,28 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4):
         results[n][1] = np.sqrt(pcov[4])
 
     return results
+
+def get_turning_point_fits(responses, coord, coord_poss, freqs, plot=False):
+
+    coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
+
+    ffreqs, errs = get_fundamental_freqs(responses,freqs)
+
+    y = ffreqs*1e-9
+
+    p = np.polyfit(x, y, w=1/errs, deg=2) # highest degree first in p
+
+    turning_point = -p[1]/(2*p[0])
+
+    if plot:
+        plt.figure()
+        tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
+        plt.plot(y, x, 'r.')
+        plt.plot(np.polyval(p,x), x, 'b--')
+        plt.plot(freqs*1e-9,turning_point*np.ones_like(freqs), 'b')
+        plt.plot(freqs*1e-9,start_pos[coord_num]*np.ones_like(freqs), 'k--')
+
+    return turning_point
     
 
 def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175):
