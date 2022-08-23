@@ -154,68 +154,36 @@ class autoaligner():
     #def __init__(self, search_order='fwd', )
         # describe all the knobs to turn
 
-def get_fundamental_freqs(responses, freqs, search_order='fwd', search_range=175, fit_win=100):
+def get_fundamental_freqs(responses, freqs, Q_guess=1e4):
     '''
     see docstring for get_fundamental_inds. 
-    except here we look at each fit_win points to either side of the found peak and fit a lorentzian
+    except here we look at the whole spectrum and fit a lorentzian.
     the return is a 2d array with (f0s, errs), rather than a 1d list.
+
+    This one expects a single resonance in view. Do a rough align before using this.
     '''
     
     N = responses.shape[0]
     f_points = responses.shape[1]
-    fundamental_inds = np.zeros_like(responses[:,0], dtype=int)
-    all_inds = np.zeros_like(responses[:,0], dtype=object) # for diagnostic purposes
+    results = np.zeros((N, 2))
 
-    if search_order != 'fwd' and search_order != 'rev':
-        print('get_fundamental got a bad arg for search_order, exiting')
-        exit(-1)
-
-    last_peak_pos = 0 # looking for lowest freq peak first
-    bounds_start = 0
-    bounds_end = responses[0].size-1
-
-    fspan = freqs[-1] - freqs[0]
-    print(fspan)
-
-    initial_prominence = 0
-    subsequent_prominence = 0
-    max_width = 1000000 * fspan/350e6 * f_points/6401 # 6401 is the resolution this was tweaked at
-    search_range = int(search_range * f_points/6401)
     for i in range(N):
-        if search_order == 'rev':
-            n = N - 1 - i
-        else:
-            n = i
-        if i == 0:
-            prominence = initial_prominence
-        else:
-            prominence = subsequent_prominence
-        peaks, properties = find_peaks(-responses[n][bounds_start:bounds_end], width=[0,max_width],prominence=prominence)#, wlen=wlen)
         
-        if i == 0:
-            metric = abs(peaks) # want leftmost peak for first row (min peak pos)
-        else:
-            metric = abs(peaks+bounds_start-last_peak_pos)*properties['widths'] # narrowest peak closest to prev. peak
+        bkg = (responses[n][0]+responses[n][-1])/2
+        bkg_slp = (responses[n][-1]-responses[n][0])/(freqs[-1]-freqs[0])
+        skw = 0
 
-        if len(peaks) == 0:
-            fundamental_inds[n] = -1
-            # can be smart about where next search range should be later
-            # but there is danger in being too smart...
-            continue
-        
-        peak_num = np.argmin(metric)
-        all_inds[n] = peaks + bounds_start
-        fundamental_inds[n] = peaks[peak_num] + bounds_start # must correct for search range limits
-        last_peak_pos = fundamental_inds[n]
-        bounds_start = last_peak_pos - search_range
-        bounds_end = last_peak_pos + search_range
+        mintrans = bkg-responses[n].min()
+        res_f = freqs[responses[n].argmin()]
 
-    # skip peak if not found
-    skipped = np.where(fundamental_inds < 0)
-    fundamental_inds = np.delete(fundamental_inds, skipped)
-    all_inds = np.delete(all_inds, skipped)
+        Q = Q_guess
 
-    return fundamental_inds, skipped
+        popt, pcov = curve_fit(skewed_lorentzian,freqs,responses[n],p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
+
+        results[n][0] = popt[4]
+        results[n][1] = np.sqrt(pcov[4])
+
+    return results
     
 
 def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175):
