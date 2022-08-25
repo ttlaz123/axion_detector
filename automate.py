@@ -671,6 +671,7 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
             raw_responses_with_bad_first_row, poss = scan_one_give_pos_breakin(auto, coord, starts[i], ends[i], incrs[i], breakin_step_size=breakin, plot=False, save=save)
             # I think the bad first row is a symptom of the skipping in X anyway. I think the other dofs are fine
             raw_responses = raw_responses_with_bad_first_row[1:]
+
             poss = poss[1:]
 
             coord_poss = poss[:,(coord == coord_lookup)]
@@ -986,7 +987,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.005,0.1,0.2,0.02,0.005]), plot=True)
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.02,0.1,0.2,0.05,0.02]), plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None

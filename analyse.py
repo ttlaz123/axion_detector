@@ -176,7 +176,7 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
         plt.figure()
 
     for n in range(N):
-        
+
         bkg = (responses[n][0]+responses[n][-1])/2
         bkg_slp = (responses[n][-1]-responses[n][0])/(freqs[-1]-freqs[0])
         skw = 0
@@ -185,8 +185,8 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
         min_ind = responses[n].argmin()
         res_f = freqs[min_ind]
 
-        win_freq = freqs[min_ind - fit_win : min_ind + fit_win]
-        win_resp = responses[n][min_ind - fit_win : min_ind + fit_win]
+        win_freq = freqs[max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
+        win_resp = responses[n][max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
 
         Q = Q_guess
 
