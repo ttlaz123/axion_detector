@@ -226,7 +226,7 @@ class AutoScanner():
             
             print(f'Iteration {i+1} of {len(tuning_sequence)}')
 
-            if i == 0 or i == len(tuning_squence)-1:
+            if i == 0 or i == len(tuning_sequence)-1:
                 # break in motors just before all the little motions, and after recentering
                 # (only works for one direction. Hopefully don't have to do this for N-M...)
                 self.incremental_move({coord: -direction*breakin_step_size})
@@ -688,7 +688,7 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
                 aligned[i] = False
                 command = {coord:deltas[i]}
                 print(f'Adjusting {command}')
-                if delta < 0:
+                if deltas[i] < 0:
                     # want to make sure we always end on a positive move.
                     auto.hexa.incremental_move(**{coord:-breakin})
                     auto.hexa.incremental_move(**command)
