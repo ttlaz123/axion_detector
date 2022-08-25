@@ -226,8 +226,8 @@ class AutoScanner():
             
             print(f'Iteration {i+1} of {len(tuning_sequence)}')
 
-            if i == 0:
-                # break in motors just before all the little motions
+            if i == 0 or i == len(tuning_squence)-1:
+                # break in motors just before all the little motions, and after recentering
                 # (only works for one direction. Hopefully don't have to do this for N-M...)
                 self.incremental_move({coord: -direction*breakin_step_size})
                 self.incremental_move(step)
