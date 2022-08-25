@@ -1046,7 +1046,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-6, 1e-4, 1e-4, 1e-4, 1e-4], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.01,0.1,0.3,0.01,0.01]), plot=True)
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-5, 1e-4, 1e-4, 1e-4, 1e-5], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.01,0.1,0.2,0.02,0.01]), plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None

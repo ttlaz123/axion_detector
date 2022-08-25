@@ -154,7 +154,7 @@ class autoaligner():
     #def __init__(self, search_order='fwd', )
         # describe all the knobs to turn
 
-def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=True):
+def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False):
     '''
     see docstring for get_fundamental_inds. 
     except here we look at the whole spectrum and fit a lorentzian.
@@ -200,6 +200,7 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=True)
             plt.plot(freqs, responses[n], 'k.')
             x = np.linspace(win_freq[0], win_freq[-1])
             plt.plot(x, skewed_lorentzian(x, *popt), 'r')
+            plt.axis('off')
 
     if plot:
         plt.show()
@@ -210,7 +211,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win)
+    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=True)
     ffreqs = results[:,0].T
     errs = results[:,1].T
     
@@ -220,17 +221,22 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
     print(errs, errs.shape)
     print(1/errs, (1/errs).shape)
 
-    p = np.polyfit(coord_poss, ffreqs, w=1/errs, deg=2) # highest degree first in p
+    p, cov = np.polyfit(coord_poss, ffreqs, w=1/errs, deg=2, cov=True) # highest degree first in p
 
     turning_point = -p[1]/(2*p[0])
+    turning_point_err = turning_point * np.sqrt((np.sqrt(cov[1][1])/p[1])**2 + (np.sqrt(cov[0][0])/p[0])**2)
+    print(f"error on tp: {turning_point_err}")
 
     if plot:
-        x = np.linspace(coord_poss[0], coord_poss[-1])
+        x = np.linspace(coord_poss[0], coord_poss[-1], 1000)
         plt.figure()
+        plt.axhspan(turning_point-turning_point_err, turning_point+turning_point_err, color="deepskyblue", alpha=0.5)
         plt.errorbar(ffreqs, coord_poss, fmt='k.', xerr=errs, capsize=2)
         plt.plot(np.polyval(p,x), x, 'b--')
-        plt.plot(freqs,turning_point*np.ones_like(freqs), 'b')
-        plt.plot(freqs,start_pos[coord_num]*np.ones_like(freqs), 'k--')
+        bar_x = np.linspace(np.min(ffreqs),np.max(ffreqs)+2e4, 2)
+        plt.plot(bar_x,turning_point*np.ones_like(bar_x), 'b')
+        plt.plot(bar_x,start_pos[coord_num]*np.ones_like(bar_x), 'k--')
+
 
     return turning_point
     
