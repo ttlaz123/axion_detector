@@ -129,39 +129,6 @@ class AutoScanner():
         param_name = list(step.keys())[0]
 
         self.hexa.absolute_move(**step, coord_sys="Work")
-
-    def tuning_scan_antiskip(self, tuning_sequence, delay=0.2):
-        '''
-        Execute a tuning scan with a sequence of incremental positions.
-        Meant to eliminate slips in X by stepping (causes skip), stepping again (no skip), then backstepping (skipping back)
-        '''
-
-        print('Starting scan...')
-
-        freqs = self.na.get_pna_freq()
-        responses = np.zeros((len(tuning_sequence), len(freqs)))
-
-        for i,step in enumerate(tuning_sequence):
-            
-            print(f'Iteration {i+1} of {len(tuning_sequence)}')
-
-            self.single_coord_antiskip_incremental_move(step)
-
-            time.sleep(delay)
-        
-            total_retries = 10
-            for attempt in range(total_retries):
-
-                response = self.na.get_pna_response()
-                if(response is None):
-                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
-                    continue
-                else:
-                    break
-
-            responses[i] = response
-
-        return responses, freqs
     
     def tuning_scan_abs(self, tuning_sequence, delay=0.2):
         '''
@@ -475,39 +442,6 @@ def scan_one_abs(auto, coord, start, end, incr, delay=0.2, plot=False, save=Fals
     
     return responses
 
-def scan_one_antiskip(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
-    '''
-    uses incremental moves and the three-step antiskip method
-    DOES NOT SOLVE THE PROBLEM
-    '''
-    err,start_pos = auto.hexa.get_position()
-    if err != 0:
-        print(f'ERROR {err} with hexapod, exiting')
-        auto.hexa.close()
-    
-        exit(err)
-    
-    if(auto.pos is None):
-        start_pos[2] = -1
-    else:
-        start_pos[2] = auto.pos.get_position()
-
-    seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
-    responses, freqs = auto.tuning_scan_antiskip(seq, delay=delay)
-
-    if plot:
-        plt.figure(figsize=[8,6])
-        plot_tuning(responses, freqs, start_pos, coord, start, end)
-    if save:
-        save_tuning(responses, freqs, start_pos, coord, start, end)
-    
-    if(auto.webhook is None):
-        print(f"Scan of {coord} COMPLETE")
-    else:
-        auto.webhook.send(f"Scan of {coord} COMPLETE")
-
-    return responses
-
 def scan_one_give_pos(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
     '''
     scan one coord, returning the responses as well as the hexa's position along that coord at each step
@@ -707,7 +641,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=10, plot=False, save=True, fit_win=100):
+def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
     '''
     Align automatically, given you're zoomed in on a single resonance and the perturbations are small (no peak finding, only fitting).
     Uses skewed loretzian magnitude fits with errors, and tags each one with the actual hexa position.
@@ -726,7 +660,7 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
     ends = -starts
     incrs = (ends-starts)/num_spectra
 
-    deltas = np.zeros(coord_lookup.size)
+    deltas = np.zeros(coord_lookup.size-1) # no Z
 
     iter = 0
     while iter < max_iters and np.any(aligned == False):
@@ -734,7 +668,7 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses_with_bad_first_row, poss = scan_one_give_pos_breakin(auto, coord, starts[i], ends[i], incrs[i], breakin_step_size=0.1, plot=False, save=save)
+            raw_responses_with_bad_first_row, poss = scan_one_give_pos_breakin(auto, coord, starts[i], ends[i], incrs[i], breakin_step_size=breakin, plot=False, save=save)
             # I think the bad first row is a symptom of the skipping in X anyway. I think the other dofs are fine
             raw_responses = raw_responses_with_bad_first_row[1:]
             poss = poss[1:]
@@ -754,7 +688,13 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
                 aligned[i] = False
                 command = {coord:deltas[i]}
                 print(f'Adjusting {command}')
-                auto.hexa.incremental_move(**command)
+                if delta < 0:
+                    # want to make sure we always end on a positive move.
+                    auto.hexa.incremental_move(**{coord:-breakin})
+                    auto.hexa.incremental_move(**command)
+                    auto.hexa.incremental_move(**{coord:breakin})
+                else:
+                    auto.hexa.incremental_move(**command)
 
         iter += 1
     if iter >= max_iters:
@@ -1046,7 +986,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-5, 1e-4, 1e-4, 1e-4, 1e-5], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.01,0.1,0.2,0.02,0.01]), plot=True)
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[25, 50, 50, 25, 20], ranges=np.array([0.005,0.1,0.2,0.02,0.005]), plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None
