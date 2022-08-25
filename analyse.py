@@ -154,56 +154,83 @@ class autoaligner():
     #def __init__(self, search_order='fwd', )
         # describe all the knobs to turn
 
-def get_fundamental_freqs(responses, freqs, Q_guess=1e4):
+def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=True):
     '''
     see docstring for get_fundamental_inds. 
     except here we look at the whole spectrum and fit a lorentzian.
     the return is a 2d array with (f0s, errs), rather than a 1d list.
 
     This one expects a single resonance in view. Do a rough align before using this.
+
+    TODO: Implement fit_win scale with zoom
     '''
     
     N = responses.shape[0]
     f_points = responses.shape[1]
     results = np.zeros((N, 2))
 
-    for i in range(N):
+    fit_win = int(np.round(fit_win * f_points/801)) # n points it was tuned on
+
+    if plot:  
+        plot_side_len = np.ceil(np.sqrt(N))
+        plt.figure()
+
+    for n in range(N):
         
         bkg = (responses[n][0]+responses[n][-1])/2
         bkg_slp = (responses[n][-1]-responses[n][0])/(freqs[-1]-freqs[0])
         skw = 0
 
         mintrans = bkg-responses[n].min()
-        res_f = freqs[responses[n].argmin()]
+        min_ind = responses[n].argmin()
+        res_f = freqs[min_ind]
+
+        win_freq = freqs[min_ind - fit_win : min_ind + fit_win]
+        win_resp = responses[n][min_ind - fit_win : min_ind + fit_win]
 
         Q = Q_guess
 
-        popt, pcov = curve_fit(skewed_lorentzian,freqs,responses[n],p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
+        popt, pcov = curve_fit(skewed_lorentzian,win_freq,win_resp,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
 
         results[n][0] = popt[4]
-        results[n][1] = np.sqrt(pcov[4])
+        results[n][1] = np.sqrt(pcov[4][4])
+
+        if plot:
+            plt.subplot(plot_side_len, plot_side_len, n+1)
+            plt.plot(freqs, responses[n], 'k.')
+            x = np.linspace(win_freq[0], win_freq[-1])
+            plt.plot(x, skewed_lorentzian(x, *popt), 'r')
+
+    if plot:
+        plt.show()
 
     return results
 
-def get_turning_point_fits(responses, coord, coord_poss, freqs, plot=False):
+def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_win=100, plot=False):
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    ffreqs, errs = get_fundamental_freqs(responses,freqs)
+    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win)
+    ffreqs = results[:,0].T
+    errs = results[:,1].T
+    
+    coord_poss = coord_poss.T[0] # quirk of how things are ordred
+    print(coord_poss, coord_poss.shape)
+    print(ffreqs, ffreqs.shape)
+    print(errs, errs.shape)
+    print(1/errs, (1/errs).shape)
 
-    y = ffreqs*1e-9
-
-    p = np.polyfit(x, y, w=1/errs, deg=2) # highest degree first in p
+    p = np.polyfit(coord_poss, ffreqs, w=1/errs, deg=2) # highest degree first in p
 
     turning_point = -p[1]/(2*p[0])
 
     if plot:
+        x = np.linspace(coord_poss[0], coord_poss[-1])
         plt.figure()
-        tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
-        plt.plot(y, x, 'r.')
+        plt.errorbar(ffreqs, coord_poss, fmt='k.', xerr=errs, capsize=2)
         plt.plot(np.polyval(p,x), x, 'b--')
-        plt.plot(freqs*1e-9,turning_point*np.ones_like(freqs), 'b')
-        plt.plot(freqs*1e-9,start_pos[coord_num]*np.ones_like(freqs), 'k--')
+        plt.plot(freqs,turning_point*np.ones_like(freqs), 'b')
+        plt.plot(freqs,start_pos[coord_num]*np.ones_like(freqs), 'k--')
 
     return turning_point
     
