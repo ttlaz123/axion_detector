@@ -6,6 +6,8 @@ import tuning_plotter
 
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
+from uncertainties import ufloat
+from uncertainties.umath import *
 import argparse
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
@@ -169,6 +171,7 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
     f_points = responses.shape[1]
     results = np.zeros((N, 2))
 
+    # works for 10.5 MHz span
     fit_win = int(np.round(fit_win * f_points/801)) # n points it was tuned on
 
     if plot:  
@@ -221,24 +224,46 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
     print(errs, errs.shape)
     print(1/errs, (1/errs).shape)
 
-    p, cov = np.polyfit(coord_poss, ffreqs, w=1/errs, deg=2, cov=True) # highest degree first in p
+    if coord == 'dX' or coord == 'dW':
+        fit_deg = 4
+    else:
+        fit_deg = 2
 
-    turning_point = -p[1]/(2*p[0])
-    turning_point_err = turning_point * np.sqrt((np.sqrt(cov[1][1])/p[1])**2 + (np.sqrt(cov[0][0])/p[0])**2)
-    print(f"error on tp: {turning_point_err}")
+    p, cov = np.polyfit(coord_poss, ffreqs, w=1/(errs)**2, deg=fit_deg, cov="unscaled") # highest degree first in p
+
+    print(p)
+    print(cov)
+
+    p_unc = np.array([ufloat(p[i], np.sqrt(cov[i][i])) for i in range(len(p))])
+
+    # analytically get turning point and unceratinties
+    if fit_deg == 2:
+        vertex = -p_unc[1]/(2*p_unc[0])
+    elif fit_deg == 4:
+        p = -p_unc[1]/(3*p_unc[0])
+        q = p**3 + (p_unc[1]*p_unc[2]-3*p_unc[0]*p_unc[3])/(6*p_unc[0]**2)
+        r = p_unc[2]/(3*p_unc[0])
+        # we just hope we're in the case where there's one vertex
+        vertex = (q+sqrt(q**2+(r-p**2)**3))**(1/3) + (q-sqrt(q**2+(r-p**2)**3))**(1/3) + p
+    else:
+        raise(ValueError,"fit degree has to be 2 or 4")
+
+    print(f"error on vertex: {vertex.s}")
 
     if plot:
         x = np.linspace(coord_poss[0], coord_poss[-1], 1000)
         plt.figure()
-        plt.axhspan(turning_point-turning_point_err, turning_point+turning_point_err, color="deepskyblue", alpha=0.5)
+        plt.axhspan(vertex.n-vertex.s, vertex.n+vertex.s, color="deepskyblue", alpha=0.5)
         plt.errorbar(ffreqs, coord_poss, fmt='k.', xerr=errs, capsize=2)
         plt.plot(np.polyval(p,x), x, 'b--')
         bar_x = np.linspace(np.min(ffreqs),np.max(ffreqs)+2e4, 2)
-        plt.plot(bar_x,turning_point*np.ones_like(bar_x), 'b')
+        plt.plot(bar_x,vertex.n*np.ones_like(bar_x), 'b')
         plt.plot(bar_x,start_pos[coord_num]*np.ones_like(bar_x), 'k--')
+        plt.figure()
+        plt.plot(coord_poss, 0*coord_poss, 'k--')
+        plt.plot(coord_poss, ffreqs - np.polyval(p, coord_poss), 'k.')
 
-
-    return turning_point
+    return vertex.n
     
 
 def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175):
@@ -346,7 +371,9 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, search_rang
     x = np.delete(x, skipped)
     y = freqs[fundamental_inds]*1e-9
 
-    p = np.polyfit(x, y, deg=2) # highest degree first in p
+    fit_deg = 2
+
+    p = np.polyfit(x, y, deg=fit_deg) # highest degree first in p
 
     turning_point = -p[1]/(2*p[0])
 
