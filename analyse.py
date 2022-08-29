@@ -231,11 +231,18 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
 
     p, cov = np.polyfit(coord_poss, ffreqs, w=1/(errs)**2, deg=fit_deg, cov="unscaled") # highest degree first in p
 
-    print(p)
-    print(cov)
-
     p_unc = np.array([ufloat(p[i], np.sqrt(cov[i][i])) for i in range(len(p))])
 
+    # numerically get turning point and uncertainties
+    # in this case it's not necessarily the vertex, just the lowest point
+
+    # make gaussian distributions of each parameter
+
+    # get the lowest point of each of the produced curves
+
+    # get the std of that distribution
+
+    """
     # analytically get turning point and unceratinties
     if fit_deg == 2:
         vertex = -p_unc[1]/(2*p_unc[0])
@@ -247,6 +254,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
         vertex = (q+sqrt(q**2+(r-p**2)**3))**(1/3) + (q-sqrt(q**2+(r-p**2)**3))**(1/3) + p
     else:
         raise(ValueError,"fit degree has to be 2 or 4")
+    """
 
     print(f"error on vertex: {vertex.s}")
 
