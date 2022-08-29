@@ -242,12 +242,12 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
     resolution = 1000000 # how many points to plot to find minimum
     p_samples = np.zeros((fit_deg+1, samples))
     tp_samples = np.zeros(samples)
-    for i in fit_deg+1:
+    for i in range(fit_deg+1):
         p_samples[i] = np.random.normal(loc=p_unc[i].n, scale=p_unc[i].s, size=samples)
 
     # get the lowest point of each of the produced curves
     numerical_est_x = np.linspace(coord_poss[0], coord_poss[-1], resolution)
-    for i in samples:
+    for i in range(samples):
         numerical_est_y = np.polyval(p_samples[:,i], numerical_est_x)
         tp_samples[i] = numerical_est_x[np.argmin(numerical_est_y)]
 
