@@ -641,7 +641,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
+def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
     '''
     Align automatically, given you're zoomed in on a single resonance and the perturbations are small (no peak finding, only fitting).
     Uses skewed loretzian magnitude fits with errors, and tags each one with the actual hexa position.
@@ -676,7 +676,7 @@ def autoalign_fits(auto, coords, margins, ranges, num_spectra=[20]*6, max_iters=
 
             coord_poss = poss[:,(coord == coord_lookup)]
 
-            tp = analyse.get_turning_point_fits(raw_responses, coord, coord_poss, start_pos, freqs, fit_win=150, plot=plot)     
+            tp = analyse.get_turning_point_fits(raw_responses, coord, coord_poss, start_pos, freqs, fit_deg=degs[i], fit_win=fit_win, plot=plot)     
             deltas[i] = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
             print(f"{coord} tp at {tp}, delta of {deltas[i]}")
 
@@ -987,7 +987,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[30, 50, 50, 25, 20], ranges=np.array([0.02,0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 50, 25, 25], ranges=np.array([0.01,0.1,0.2,0.05,0.02]), degs=[4,2,3,4,4], fit_win=50, plot=True)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
