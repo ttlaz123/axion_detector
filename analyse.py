@@ -254,8 +254,9 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
     # get the lowest point of each of the produced curves
     numerical_est_x = np.linspace(coord_poss[0], coord_poss[-1], resolution)
     for i in range(samples):
-        numerical_est_y = np.polyval(p_samples[i], numerical_est_x)
-        tp_samples[i] = numerical_est_x[np.argmax(numerical_est_y)]
+        #numerical_est_y = np.polyval(p_samples[i], numerical_est_x)
+        #tp_samples[i] = numerical_est_x[np.argmax(numerical_est_y)]
+        tp_samples[i] = -p_samples[i][1]/(2*p_samples[i][0])
 
     # get the std of that distribution
     vertex = ufloat(np.mean(tp_samples), np.std(tp_samples))
@@ -283,8 +284,8 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
         plt.errorbar(ffreqs, coord_poss, fmt='k.', xerr=errs, capsize=2)
         plt.plot(np.polyval(p,x), x, 'b--')
         bar_x = np.linspace(np.min(ffreqs),np.max(ffreqs)+2e4, 2)
-        plt.plot(bar_x,vertex.n*np.ones_like(bar_x), 'b')
-        plt.plot(bar_x,start_pos[coord_num]*np.ones_like(bar_x), 'k--')
+        plt.axhline(vertex.n, color='b')
+        plt.axhline(start_pos[coord_num], color='k', ls='--')
         plt.figure()
         plt.plot(coord_poss, 0*coord_poss, 'k--')
         plt.plot(coord_poss, ffreqs - np.polyval(p, coord_poss), 'k.')
