@@ -239,7 +239,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
 
     p_unc = np.array([ufloat(p[i], poly_err[i]) for i in range(len(p))])
 
-    
+    """
     # numerically get turning point and uncertainties
     # in this case it's not necessarily the vertex, just the lowest point
 
@@ -273,7 +273,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
         vertex = (q+sqrt(q**2+(r-p**2)**3))**(1/3) + (q-sqrt(q**2+(r-p**2)**3))**(1/3) + p
     else:
         raise(ValueError,"fit degree has to be 2 or 4")
-    """
+    
 
     print(f"error on vertex: {vertex.s}")
 
