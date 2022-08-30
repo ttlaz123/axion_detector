@@ -219,43 +219,48 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_w
     errs = results[:,1].T
     
     coord_poss = coord_poss.T[0] # quirk of how things are ordred
-    print(coord_poss, coord_poss.shape)
+    print(coord_poss, coord_poss.shape, coord_poss.dtype)
     print(ffreqs, ffreqs.shape)
     print(errs, errs.shape)
     print(1/errs, (1/errs).shape)
 
+    ffreqs_scaled = ffreqs #- np.mean(ffreqs) # maybe polyfit has trouble with big numbers
+
     if coord == 'dX' or coord == 'dW':
-        fit_deg = 4
+        fit_deg = 2
     else:
         fit_deg = 2
 
-    p, cov = np.polyfit(coord_poss, ffreqs, w=1/(errs)**2, deg=fit_deg, cov="unscaled") # highest degree first in p
+    p, cov = np.polyfit(coord_poss, ffreqs_scaled, w=1/(errs), deg=fit_deg, cov="unscaled") # highest degree first in p
+
+    #p[-1] += np.mean(ffreqs) # correcting for the rescaling
+    print(cov)
     poly_err = np.array([np.sqrt(cov[i][i]) for i in range(len(p))])
 
     p_unc = np.array([ufloat(p[i], poly_err[i]) for i in range(len(p))])
 
+    
     # numerically get turning point and uncertainties
     # in this case it's not necessarily the vertex, just the lowest point
 
     # make gaussian distributions of each parameter
-    samples = 1000000 # how many curves to make
-    resolution = 1000000 # how many points to plot to find minimum
-    p_samples = np.zeros((fit_deg+1, samples))
+    samples = 1000 # how many curves to make
+    resolution = 10000 # how many points to plot to find minimum
+    p_samples = np.zeros(samples)
     tp_samples = np.zeros(samples)
-    for i in range(fit_deg+1):
-        p_samples[i] = np.random.normal(loc=p_unc[i].n, scale=p_unc[i].s, size=samples)
+
+    p_samples = np.random.multivariate_normal(p, cov, size=samples)
 
     # get the lowest point of each of the produced curves
     numerical_est_x = np.linspace(coord_poss[0], coord_poss[-1], resolution)
     for i in range(samples):
-        numerical_est_y = np.polyval(p_samples[:,i], numerical_est_x)
-        tp_samples[i] = numerical_est_x[np.argmin(numerical_est_y)]
+        numerical_est_y = np.polyval(p_samples[i], numerical_est_x)
+        tp_samples[i] = numerical_est_x[np.argmax(numerical_est_y)]
 
     # get the std of that distribution
-    vertex = ufloat(np.mean(tp_smaples), np.std(tp_samples))
-
-
+    vertex = ufloat(np.mean(tp_samples), np.std(tp_samples))
     """
+    
     # analytically get turning point and unceratinties
     if fit_deg == 2:
         vertex = -p_unc[1]/(2*p_unc[0])
