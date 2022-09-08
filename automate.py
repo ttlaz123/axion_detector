@@ -10,6 +10,8 @@ import analyse
 import nidaqmx
 import winsound
 
+import time
+
 import requests
 from discord import Webhook, RequestsWebhookAdapter
 
@@ -701,11 +703,13 @@ def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
         print(f"deltas: {deltas}")
+        print(f"aligned pos: {start_pos}")
         #auto.webhook.send('Autoalign FAILED, exiting')
         exit(-1)
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
         print(f"deltas: {deltas}")
+        print(f"aligned pos: {start_pos}")
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
 
 
@@ -987,7 +991,7 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 50, 25, 25], ranges=np.array([0.01,0.1,0.2,0.05,0.02]), degs=[4,2,3,4,4], fit_win=50, plot=True)
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-4, 1e-3, 1e-4, 1e-4], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)

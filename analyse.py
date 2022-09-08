@@ -227,15 +227,21 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_d
 
     ffreqs_scaled = ffreqs - np.mean(ffreqs) # maybe polyfit has trouble with big numbers
 
-    p, cov = np.polyfit(coord_poss, ffreqs_scaled, w=1/(errs), deg=fit_deg, cov="unscaled") # highest degree first in p
-
+    try:
+        p, cov = np.polyfit(coord_poss, ffreqs_scaled, w=1/(errs), deg=fit_deg, cov="unscaled") # highest degree first in p
+    except np.linalg.LinAlgError:
+        print("LinAlg error in polyfit. Probably a singular matrix.")
+        plt.errorbar(ffreqs_scaled, coord_poss, xerr=errs, fmt='k.')
+        plt.show()
+        exit()
+        
     p[-1] += np.mean(ffreqs) # correcting for the rescaling
     print(cov)
     poly_err = np.array([np.sqrt(cov[i][i]) for i in range(len(p))])
 
     p_unc = np.array([ufloat(p[i], poly_err[i]) for i in range(len(p))])
+    print(p_unc)
 
-    
     # numerically get turning point and uncertainties
     # in this case it's not necessarily the vertex, just the lowest point
 
@@ -284,7 +290,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_d
         plt.axhline(start_pos[coord_num], color='k', ls='--')
         plt.figure()
         plt.plot(coord_poss, 0*coord_poss, 'k--')
-        plt.plot(coord_poss, ffreqs - np.polyval(p, coord_poss), 'k.')
+        plt.errorbar(coord_poss, ffreqs - np.polyval(p, coord_poss), yerr=errs, fmt='k.')
 
     return vertex.n
     
