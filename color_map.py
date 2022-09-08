@@ -11,10 +11,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220810_140822.csv'
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_133457.csv'
 
 
-def read_data(file):
+def read_data(file, return_fres=False):
     with open(file) as f:
         vals = f.readlines()
         #this works provided the measurements were taken in a square pattern:
@@ -27,7 +27,12 @@ def read_data(file):
                     counter += 1
                     deltas[i, j, k] = float(vals[counter])
         print(str(deltas))
-        return deltas
+        if return_fres:
+            fres = vals[0]
+            retval = fres, deltas
+        else:
+            retval = deltas
+        return retval
 
 def plot_deltas(deltas):
     plt.figure()
@@ -55,7 +60,7 @@ def plot_hists(deltas):
 
 def main():
     deltas = read_data(FILENAME)
-    plot_hists(deltas)
+    plot_deltas(deltas)
 
 if __name__ == '__main__':
     main()
