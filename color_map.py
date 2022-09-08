@@ -14,7 +14,7 @@ import math
 FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_133457.csv'
 
 
-def read_data(file, return_fres=False):
+def read_deltas(file, return_fres=False):
     with open(file) as f:
         vals = f.readlines()
         #this works provided the measurements were taken in a square pattern:
@@ -59,7 +59,7 @@ def plot_hists(deltas):
 
 
 def main():
-    deltas = read_data(FILENAME)
+    deltas = read_deltas(FILENAME)
     plot_deltas(deltas)
 
 if __name__ == '__main__':
