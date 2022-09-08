@@ -129,39 +129,6 @@ class AutoScanner():
         param_name = list(step.keys())[0]
 
         self.hexa.absolute_move(**step, coord_sys="Work")
-
-    def tuning_scan_antiskip(self, tuning_sequence, delay=0.2):
-        '''
-        Execute a tuning scan with a sequence of incremental positions.
-        Meant to eliminate slips in X by stepping (causes skip), stepping again (no skip), then backstepping (skipping back)
-        '''
-
-        print('Starting scan...')
-
-        freqs = self.na.get_pna_freq()
-        responses = np.zeros((len(tuning_sequence), len(freqs)))
-
-        for i,step in enumerate(tuning_sequence):
-            
-            print(f'Iteration {i+1} of {len(tuning_sequence)}')
-
-            self.single_coord_antiskip_incremental_move(step)
-
-            time.sleep(delay)
-        
-            total_retries = 10
-            for attempt in range(total_retries):
-
-                response = self.na.get_pna_response()
-                if(response is None):
-                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
-                    continue
-                else:
-                    break
-
-            responses[i] = response
-
-        return responses, freqs
     
     def tuning_scan_abs(self, tuning_sequence, delay=0.2):
         '''
@@ -197,6 +164,99 @@ class AutoScanner():
             responses[i] = response
 
         return responses, freqs
+
+    def tuning_scan_give_pos(self, tuning_sequence, delay=0.2):
+        '''
+        Same as tuning scan but also returns the position of the hexa at each step
+        '''
+
+        print('Starting scan...')
+
+        freqs = self.na.get_pna_freq()
+        responses = np.zeros((len(tuning_sequence)-1, len(freqs)))
+        poss = np.zeros((len(tuning_sequence)-1, 6))
+
+        for i,step in enumerate(tuning_sequence):
+            
+            print(f'Iteration {i+1} of {len(tuning_sequence)}')
+
+            self.incremental_move(step)
+
+            if i == len(tuning_sequence)-1:
+                # don't take data after final re-centering move
+                continue
+
+            time.sleep(delay)
+        
+            total_retries = 10
+            for attempt in range(total_retries):
+
+                response = self.na.get_pna_response()
+                if(response is None):
+                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
+                    continue
+                else:
+                    break
+
+            responses[i] = response
+            err, pos = self.hexa.get_position()
+            poss[i] = pos
+
+        return responses, freqs, poss
+
+    def tuning_scan_give_pos_breakin_single_axis(self, tuning_sequence, delay=0.2, breakin_step_size=0.01):
+        '''
+        Same as tuning scan but also returns the position of the hexa at each step
+        Also, "breaks in" the motors by initializing with a large move in the direction of motion
+        (preceeded by a counterbalancing step in the opposite direction)
+        breakin_step_size determines the size of this step.
+        '''
+
+        print('Starting scan...')
+
+        freqs = self.na.get_pna_freq()
+        responses = np.zeros((len(tuning_sequence)-1, len(freqs)))
+        poss = np.zeros((len(tuning_sequence)-1, 6))
+
+        # WORKS ONLY FOR ONE DOF MOVING RIGHT NOW
+        coord = list(tuning_sequence[0].keys())[0]
+        direction = np.sign(tuning_sequence[1][coord]) # plus or minus
+
+        for i,step in enumerate(tuning_sequence):
+            
+            print(f'Iteration {i+1} of {len(tuning_sequence)}')
+
+            if i == 0 or i == len(tuning_sequence)-1:
+                # break in motors just before all the little motions, and after recentering
+                # (only works for one direction. Hopefully don't have to do this for N-M...)
+                self.incremental_move({coord: -direction*breakin_step_size})
+                self.incremental_move(step)
+                self.incremental_move({coord: direction*breakin_step_size})
+            
+            else:
+                self.incremental_move(step)
+
+            if i == len(tuning_sequence)-1:
+                # don't take data after final re-centering move
+                continue
+
+            time.sleep(delay)
+        
+            total_retries = 10
+            for attempt in range(total_retries):
+
+                response = self.na.get_pna_response()
+                if(response is None):
+                    print(f'VNA not responding!, trying again (attempt {attempt+1}/{total_retries})')
+                    continue
+                else:
+                    break
+
+            responses[i] = response
+            err, pos = self.hexa.get_position()
+            poss[i] = pos
+
+        return responses, freqs, poss
 
 
     def tuning_scan_safety(self, tuning_sequence, delay=0.5, safe_check=True, DATA_TYPE=''):
@@ -277,7 +337,7 @@ class AutoScanner():
 
 def generate_single_axis_seq(coord, incr, start, end):
     '''
-    Generates the list of coordinates to move the hexapod 
+    Generates the list of {coordinates:amount} to move the hexapod 
     TODO: comment more
     '''
     num_moves = int(np.round((end-start)/incr))
@@ -382,10 +442,9 @@ def scan_one_abs(auto, coord, start, end, incr, delay=0.2, plot=False, save=Fals
     
     return responses
 
-def scan_one_antiskip(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
+def scan_one_give_pos(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
     '''
-    uses incremental moves and the three-step antiskip method
-    DOES NOT SOLVE THE PROBLEM
+    scan one coord, returning the responses as well as the hexa's position along that coord at each step
     '''
     err,start_pos = auto.hexa.get_position()
     if err != 0:
@@ -400,7 +459,7 @@ def scan_one_antiskip(auto, coord, start, end, incr, delay=0.2,plot=True, save=T
         start_pos[2] = auto.pos.get_position()
 
     seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
-    responses, freqs = auto.tuning_scan_antiskip(seq, delay=delay)
+    responses, freqs, poss = auto.tuning_scan_give_pos(seq, delay=delay)
 
     if plot:
         plt.figure(figsize=[8,6])
@@ -413,7 +472,39 @@ def scan_one_antiskip(auto, coord, start, end, incr, delay=0.2,plot=True, save=T
     else:
         auto.webhook.send(f"Scan of {coord} COMPLETE")
 
-    return responses
+    return responses, poss
+
+def scan_one_give_pos_breakin(auto, coord, start, end, incr, delay=0.2, breakin_step_size=0.01, plot=True, save=True):
+    '''
+    scan one coord, returning the responses as well as the hexa's position along that coord at each step
+    '''
+    err,start_pos = auto.hexa.get_position()
+    if err != 0:
+        print(f'ERROR {err} with hexapod, exiting')
+        auto.hexa.close()
+    
+        exit(err)
+    
+    if(auto.pos is None):
+        start_pos[2] = -1
+    else:
+        start_pos[2] = auto.pos.get_position()
+
+    seq = generate_single_axis_seq(coord=coord, incr=incr, start=start, end=end)
+    responses, freqs, poss = auto.tuning_scan_give_pos_breakin_single_axis(seq, delay=delay, breakin_step_size=breakin_step_size)
+
+    if plot:
+        plt.figure(figsize=[8,6])
+        plot_tuning(responses, freqs, start_pos, coord, start, end)
+    if save:
+        save_tuning(responses, freqs, start_pos, coord, start, end)
+    
+    if(auto.webhook is None):
+        print(f"Scan of {coord} COMPLETE")
+    else:
+        auto.webhook.send(f"Scan of {coord} COMPLETE")
+
+    return responses, poss
 
 def scan_one(auto, coord, start, end, incr, delay=0.2,plot=True, save=True):
     '''
@@ -550,7 +641,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_fits(auto, coords, margins, ranges, N=20, max_iters=10, plot=False, save=True, fit_win=100):
+def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
     '''
     Align automatically, given you're zoomed in on a single resonance and the perturbations are small (no peak finding, only fitting).
     Uses skewed loretzian magnitude fits with errors, and tags each one with the actual hexa position.
@@ -567,39 +658,54 @@ def autoalign_fits(auto, coords, margins, ranges, N=20, max_iters=10, plot=False
     freqs = auto.na.get_pna_freq()
     starts = -ranges
     ends = -starts
-    incrs = (ends-starts)/N
+    incrs = (ends-starts)/num_spectra
+
+    deltas = np.zeros(coord_lookup.size-1) # no Z
 
     iter = 0
     while iter < max_iters and np.any(aligned == False):
+
         for i,coord in enumerate(coords):
             err, start_pos = auto.hexa.get_position()
             # can be expaned to different ranges for each coord.
-            raw_responses_with_bad_first_row = scan_one(auto, coord, starts[i], ends[i], incrs[i], plot=False, save=save)
+            raw_responses_with_bad_first_row, poss = scan_one_give_pos_breakin(auto, coord, starts[i], ends[i], incrs[i], breakin_step_size=breakin, plot=False, save=save)
             # I think the bad first row is a symptom of the skipping in X anyway. I think the other dofs are fine
             raw_responses = raw_responses_with_bad_first_row[1:]
 
-            tp = analyse.get_turning_point_fits(specs, coord, start_pos, starts[i], ends[i], incrs[i], search_range_fine, freqs, plot=plot_fine)     
-            delta = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
-            print(f"{coord} tp at {tp}, delta of {delta}")
+            poss = poss[1:]
 
-            if plot_fine:
+            coord_poss = poss[:,(coord == coord_lookup)]
+
+            tp = analyse.get_turning_point_fits(raw_responses, coord, coord_poss, start_pos, freqs, fit_deg=degs[i], fit_win=fit_win, plot=plot)     
+            deltas[i] = tp - start_pos[np.where(coord_lookup == coord)[0]][0]
+            print(f"{coord} tp at {tp}, delta of {deltas[i]}")
+
+            if plot:
                 plt.show()
 
-            if abs(delta) < margins[i]:
+            if abs(deltas[i]) < margins[i]:
                 aligned[i] = True
             else:
                 aligned[i] = False
-                command = {coord:delta}
+                command = {coord:deltas[i]}
                 print(f'Adjusting {command}')
-                auto.hexa.incremental_move(**command)
+                if deltas[i] < 0:
+                    # want to make sure we always end on a positive move.
+                    auto.hexa.incremental_move(**{coord:-breakin})
+                    auto.hexa.incremental_move(**command)
+                    auto.hexa.incremental_move(**{coord:breakin})
+                else:
+                    auto.hexa.incremental_move(**command)
 
         iter += 1
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
+        print(f"deltas: {deltas}")
         #auto.webhook.send('Autoalign FAILED, exiting')
         exit(-1)
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
+        print(f"deltas: {deltas}")
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
 
 
@@ -876,10 +982,13 @@ def main():
 
     #scan_one_abs(auto, "X", X_now-0.02, X_now+0.02, 0.001, delay=1, plot=True, save=False)
     #scan_one_antiskip(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
-    scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
+    #scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
+
+    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 50, 25, 25], ranges=np.array([0.01,0.1,0.2,0.05,0.02]), degs=[4,2,3,4,4], fit_win=50, plot=True)
+    #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None

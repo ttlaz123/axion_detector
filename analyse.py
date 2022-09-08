@@ -6,6 +6,8 @@ import tuning_plotter
 
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
+from uncertainties import ufloat
+from uncertainties.umath import *
 import argparse
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
@@ -154,58 +156,137 @@ class autoaligner():
     #def __init__(self, search_order='fwd', )
         # describe all the knobs to turn
 
-def get_fundamental_freqs(responses, freqs, Q_guess=1e4):
+def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False):
     '''
     see docstring for get_fundamental_inds. 
     except here we look at the whole spectrum and fit a lorentzian.
     the return is a 2d array with (f0s, errs), rather than a 1d list.
 
     This one expects a single resonance in view. Do a rough align before using this.
+
+    TODO: Implement fit_win scale with zoom
     '''
     
     N = responses.shape[0]
     f_points = responses.shape[1]
     results = np.zeros((N, 2))
 
-    for i in range(N):
-        
+    # works for 10.5 MHz span
+    fit_win = int(np.round(fit_win * f_points/801)) # n points it was tuned on
+
+    if plot:  
+        plot_side_len = np.ceil(np.sqrt(N))
+        plt.figure()
+
+    for n in range(N):
+
         bkg = (responses[n][0]+responses[n][-1])/2
         bkg_slp = (responses[n][-1]-responses[n][0])/(freqs[-1]-freqs[0])
         skw = 0
 
         mintrans = bkg-responses[n].min()
-        res_f = freqs[responses[n].argmin()]
+        min_ind = responses[n].argmin()
+        res_f = freqs[min_ind]
+
+        win_freq = freqs[max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
+        win_resp = responses[n][max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
 
         Q = Q_guess
 
-        popt, pcov = curve_fit(skewed_lorentzian,freqs,responses[n],p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
+        popt, pcov = curve_fit(skewed_lorentzian,win_freq,win_resp,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q])
 
         results[n][0] = popt[4]
-        results[n][1] = np.sqrt(pcov[4])
+        results[n][1] = np.sqrt(pcov[4][4])
+
+        if plot:
+            plt.subplot(plot_side_len, plot_side_len, n+1)
+            plt.plot(freqs, responses[n], 'k.')
+            x = np.linspace(win_freq[0], win_freq[-1])
+            plt.plot(x, skewed_lorentzian(x, *popt), 'r')
+            plt.axis('off')
+
+    if plot:
+        plt.show()
 
     return results
 
-def get_turning_point_fits(responses, coord, coord_poss, freqs, plot=False):
+def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_deg=2, fit_win=100, plot=False):
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    ffreqs, errs = get_fundamental_freqs(responses,freqs)
+    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=False)
+    ffreqs = results[:,0].T
+    errs = results[:,1].T
+    
+    coord_poss = coord_poss.T[0] # quirk of how things are ordred
+    print(coord_poss, coord_poss.shape, coord_poss.dtype)
+    print(ffreqs, ffreqs.shape)
+    print(errs, errs.shape)
+    print(1/errs, (1/errs).shape)
+    print(fit_deg)
 
-    y = ffreqs*1e-9
+    ffreqs_scaled = ffreqs - np.mean(ffreqs) # maybe polyfit has trouble with big numbers
 
-    p = np.polyfit(x, y, w=1/errs, deg=2) # highest degree first in p
+    p, cov = np.polyfit(coord_poss, ffreqs_scaled, w=1/(errs), deg=fit_deg, cov="unscaled") # highest degree first in p
 
-    turning_point = -p[1]/(2*p[0])
+    p[-1] += np.mean(ffreqs) # correcting for the rescaling
+    print(cov)
+    poly_err = np.array([np.sqrt(cov[i][i]) for i in range(len(p))])
+
+    p_unc = np.array([ufloat(p[i], poly_err[i]) for i in range(len(p))])
+
+    
+    # numerically get turning point and uncertainties
+    # in this case it's not necessarily the vertex, just the lowest point
+
+    # make gaussian distributions of each parameter
+    samples = 1000 # how many curves to make
+    resolution = 10000 # how many points to plot to find minimum
+    p_samples = np.zeros(samples)
+    tp_samples = np.zeros(samples)
+
+    p_samples = np.random.multivariate_normal(p, cov, size=samples)
+
+    # get the lowest point of each of the produced curves
+    numerical_est_x = np.linspace(coord_poss[0], coord_poss[-1], resolution)
+    for i in range(samples):
+        numerical_est_y = np.polyval(p_samples[i], numerical_est_x)
+        tp_samples[i] = numerical_est_x[np.argmax(numerical_est_y)]
+        #tp_samples[i] = -p_samples[i][1]/(2*p_samples[i][0])
+
+    # get the std of that distribution
+    vertex = ufloat(np.mean(tp_samples), np.std(tp_samples))
+    """
+    
+    # analytically get turning point and unceratinties
+    if fit_deg == 2:
+        vertex = -p_unc[1]/(2*p_unc[0])
+    elif fit_deg == 4:
+        p = -p_unc[1]/(3*p_unc[0])
+        q = p**3 + (p_unc[1]*p_unc[2]-3*p_unc[0]*p_unc[3])/(6*p_unc[0]**2)
+        r = p_unc[2]/(3*p_unc[0])
+        # we just hope we're in the case where there's one vertex
+        vertex = (q+sqrt(q**2+(r-p**2)**3))**(1/3) + (q-sqrt(q**2+(r-p**2)**3))**(1/3) + p
+    else:
+        raise(ValueError,"fit degree has to be 2 or 4")
+    """
+
+    print(f"error on vertex: {vertex.s}")
 
     if plot:
+        x = np.linspace(coord_poss[0], coord_poss[-1], 1000)
         plt.figure()
-        tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
-        plt.plot(y, x, 'r.')
+        plt.axhspan(vertex.n-vertex.s, vertex.n+vertex.s, color="deepskyblue", alpha=0.5)
+        plt.errorbar(ffreqs, coord_poss, fmt='k.', xerr=errs, capsize=2)
         plt.plot(np.polyval(p,x), x, 'b--')
-        plt.plot(freqs*1e-9,turning_point*np.ones_like(freqs), 'b')
-        plt.plot(freqs*1e-9,start_pos[coord_num]*np.ones_like(freqs), 'k--')
+        bar_x = np.linspace(np.min(ffreqs),np.max(ffreqs)+2e4, 2)
+        plt.axhline(vertex.n, color='b')
+        plt.axhline(start_pos[coord_num], color='k', ls='--')
+        plt.figure()
+        plt.plot(coord_poss, 0*coord_poss, 'k--')
+        plt.plot(coord_poss, ffreqs - np.polyval(p, coord_poss), 'k.')
 
-    return turning_point
+    return vertex.n
     
 
 def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175):
@@ -313,7 +394,9 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, search_rang
     x = np.delete(x, skipped)
     y = freqs[fundamental_inds]*1e-9
 
-    p = np.polyfit(x, y, deg=2) # highest degree first in p
+    fit_deg = 2
+
+    p = np.polyfit(x, y, deg=fit_deg) # highest degree first in p
 
     turning_point = -p[1]/(2*p[0])
 
