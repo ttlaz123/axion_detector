@@ -28,7 +28,7 @@ def read_deltas(file, return_fres=False):
                     deltas[i, j, k] = float(vals[counter])
         print(str(deltas))
         if return_fres:
-            fres = vals[0]
+            fres = float(vals[0])
             retval = fres, deltas
         else:
             retval = deltas

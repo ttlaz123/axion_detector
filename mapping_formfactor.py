@@ -1,7 +1,7 @@
 import numpy as np
 import color_map # has data reading functions
 
-fname = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_132445.csv'
+fname = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_133457.csv'
 
 fres, deltas = color_map.read_deltas(fname, return_fres=True)
 
@@ -12,12 +12,12 @@ fres, deltas = color_map.read_deltas(fname, return_fres=True)
 
 d3x = 1/50
 
-# hoping the prefactor on df = f * E**2 cancels somehow for now
+# the prefactor on df = E**2 is irrelevant for C it turns out (empirically, numerically)
 # also assuming all E in the z direction, at least approx true for fund.
+# I imagine there should be an abs around the deltas.
 
-Es = np.sqrt(deltas / fres)
-E2s = deltas / fres
+Es = np.sqrt(np.abs(deltas))
 
-C = np.sum(Es * d3x)**2 / np.sum(E2s * d3x)
+C = np.sum(Es * d3x)**2 / np.sum(Es**2 * d3x)
 
 print(C)
