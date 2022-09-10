@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_133457.csv'
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220830_171933.csv'
 
 
 def read_deltas(file, return_fres=False):

@@ -219,6 +219,8 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_d
     errs = results[:,1].T
     
     coord_poss = coord_poss.T[0] # quirk of how things are ordred
+    print(np.diff(coord_poss))
+    print(np.mean(np.diff(coord_poss)))
     print(coord_poss, coord_poss.shape, coord_poss.dtype)
     print(ffreqs, ffreqs.shape)
     print(errs, errs.shape)

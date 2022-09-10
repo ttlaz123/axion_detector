@@ -5,12 +5,14 @@ import matplotlib.pyplot as plt
 import threading
 
 from scipy.signal import find_peaks
+from scipy.optimize import minimize
 import analyse
 
 import nidaqmx
 import winsound
 
 import time
+from functools import partial
 
 import requests
 from discord import Webhook, RequestsWebhookAdapter
@@ -120,17 +122,17 @@ class AutoScanner():
         else:
             self.pos.incremental_move(step['dZ'])
 
-    def absolute_move(self, step):
+    def absolute_move(self, position):
         """
-        step: {"dX": position, "dY": position, Z, U, V, W..} (all coords required)
+        position: {"X": position, "Y": position, Z, U, V, W..} (all coords required)
 
         move all given coords to position (hexa only.)
         """
-        print(f'Performing move: {step} ')
+        print(f'Performing move: {position} ')
 
-        param_name = list(step.keys())[0]
+        param_name = list(position.keys())[0]
 
-        self.hexa.absolute_move(**step, coord_sys="Work")
+        self.hexa.absolute_move(**position, coord_sys="Work")
     
     def tuning_scan_abs(self, tuning_sequence, delay=0.2):
         '''
@@ -336,6 +338,23 @@ class AutoScanner():
             collision = True
         self.hexstatus = 'stop'
         return responses, freqs, collision
+
+    def NMeval(self, positions, Z_pos, freqs, fit_win):
+        """
+        Take in an absolute position.
+        Get the resonant frequency from find_fundamental_freqs (but only one row)
+        Seems like NM can't take error into account, so ditch that, and just return fres.
+        Need Z_pos arg to keep Z in the same place.
+        positions is just X Y U V W
+        """
+        full_pos = np.zeros(6)
+        full_pos[:2] = positions[:2]
+        full_pos[2] = Z_pos
+        full_pos[3:] = positions[2:]
+        self.absolute_move(full_pos)
+        response = self.na.get_pna_response()
+        results = analyse.find_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win)
+        return results[0][0]
 
 def generate_single_axis_seq(coord, incr, start, end):
     '''
@@ -643,6 +662,31 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
+def autoalign_NM(auto, xatol, limits, max_iters=None, fit_win=100):
+    """
+    autoalign using nelder mead
+    ONLY use if it's close to aligned, and the VNA is focused on one resonance.
+    always aligns over all dofs but Z.
+
+    xatol is the same as defined in scipy.optimize.minimize, that is the maximum distance between points in the simplex for conversion
+    limits is the margin for movement given for each parameter, from the starting position.
+    max_iters is sraightforward
+    fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
+    """
+    
+    _, start_pos = auto.hexa.get_position()
+    freqs = auto.na.get_pna_freq()
+    Z_pos = start_pos[2]
+
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win)
+    start_pos_no_z = np.delete(start_pos, 2)
+    bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
+
+    res = minimize(this_NMeval, start_pos_no_z, method='Nelder-Mead', bounds=bounds, options={'maxiter': max_iters, 'xatol': xatol, 'disp':True})
+
+    print(res)
+
+
 def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
     '''
     Align automatically, given you're zoomed in on a single resonance and the perturbations are small (no peak finding, only fitting).
@@ -711,7 +755,6 @@ def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5
         print(f"deltas: {deltas}")
         print(f"aligned pos: {start_pos}")
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
-
 
 def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''
@@ -991,7 +1034,8 @@ def main():
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-4, 1e-3, 1e-4, 1e-4], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
+    autoalign_NM(auto, 1e-3, [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=None, fit_win=100)
+    #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-4, 1e-4, 1e-3, 1e-4, 1e-4], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
