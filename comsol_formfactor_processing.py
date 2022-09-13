@@ -7,7 +7,40 @@ from scipy.interpolate import interp1d
 # make a csv titled with the DoF, with max form factor and positions associated
 # plots the frequency associated w/ max form factor to ensure the frequency does't jump to a new resonance
 
-def read_comsol_formfactor(DoF, data_path="form_factor_data", plot=False):
+def read_comsol_integrations(fname, colnames=['freq', 'ez', 'e2', 'v']):
+    """
+    Read the comsol integration csv at fname
+    returns array of freq, ez, e^2, and volume in complex format (only ez has imag part though)
+    """
+    
+    print(f"working on file: {fname}")
+    
+    # numpy expects j's for complex numbers...
+    with open(fname, 'rt') as f:
+        dat = f.read()
+        dat = dat.replace('i', 'j')
+    with open(fname, 'wt') as f:
+        f.write(dat)
+
+    header = 5  # N of lines to skip at the header
+    
+    cdat = np.genfromtxt(fname, skip_header=header, dtype=np.complex_)
+
+    # columns are freq, Ez, E^2, V
+    # (integrated over the whole model)
+
+    results = {}
+    
+    for i, name in enumerate(colnames):
+        if name == 'ex' or name == 'ey' or name == 'ez':
+            results[name] = cdat[:,i].T
+        else:
+            results[name] = np.real(cdat[:,i].T)
+    
+    return results
+    
+
+def formfactor_evolution(DoF, data_path, plot=True):
 
     if DoF == "X" or DoF == 'x':
         distances = [5, 10, 15, 20, 30] # this is for figuring out fnames
@@ -31,7 +64,6 @@ def read_comsol_formfactor(DoF, data_path="form_factor_data", plot=False):
         unit = "arcmin"
         
     fnames = [f'{data_path}/aligned_form_factor{suffix}.txt'] + [f'{data_path}/d{DoF.lower()}{distances[i]}{unit}_form_factor{suffix}.txt' for i in range(len(distances))]
-    header = [5]*(len(distances)+1) # N of lines to skip at the header
 
     if unit == "um":
         dists = np.array([0] + distances)*1e-3 # in mm
@@ -44,24 +76,12 @@ def read_comsol_formfactor(DoF, data_path="form_factor_data", plot=False):
     full_Cs = np.zeros((len(fnames), interpN)) # have to interpolate
     
     for i, fname in enumerate(fnames):
+
+        cdat = read_comsol_integrations(fname)
     
-        print(f"working on file: {fname}")
-        
-        # numpy expects j's for complex numbers...
-        with open(fname, 'rt') as f:
-            dat = f.read()
-            dat = dat.replace('i', 'j')
-        with open(fname, 'wt') as f:
-            f.write(dat)
+        Cs = np.abs(cdat['ez'])**2 / (cdat['e2'] * cdat['v']**2)
     
-        cdat = np.genfromtxt(fname, skip_header=header[i], dtype=np.complex_)
-    
-        # columns are freq, Ez, E^2, V
-        # (integrated over the whole model)
-    
-        Cs = np.real(np.abs(cdat[:,1])**2 / (cdat[:,3] * cdat[:,2])) # no imag part
-    
-        f = np.real(cdat[:,0].T)
+        f = cdat['freq']
         freq2C = interp1d(f, Cs)
         fnew = np.linspace(np.min(f), np.max(f), interpN)
         interpd_Cs = freq2C(fnew)
@@ -91,5 +111,6 @@ def read_comsol_formfactor(DoF, data_path="form_factor_data", plot=False):
         plt.show()
 
 if __name__=="__main__":
-    DoF = 'w'
-    read_comsol_formfactor(DoF, plot=False)
+    data_path = "form_factor_data"
+    DoF = 'x'
+    formfactor_evolution(DoF, data_path, plot=True)
