@@ -201,9 +201,11 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
         if plot:
             plt.subplot(plot_side_len, plot_side_len, n+1)
             plt.plot(freqs, responses[n], 'k.')
-            x = np.linspace(win_freq[0], win_freq[-1])
+            x = np.linspace(win_freq[0], win_freq[-1], 1000)
             plt.plot(x, skewed_lorentzian(x, *popt), 'r')
             plt.axis('off')
+            #plt.figure()
+            #plt.plot(freqs, responses[n] - skewed_lorentzian(freqs, *popt), 'k.')
 
     if plot:
         plt.show()
@@ -214,7 +216,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_d
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=True)
+    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=False)
     ffreqs = results[:,0].T
     errs = results[:,1].T
     

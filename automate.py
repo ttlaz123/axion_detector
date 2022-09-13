@@ -367,7 +367,7 @@ class AutoScanner():
         time.sleep(delay)
         response = self.na.get_pna_response()
         try:
-            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win)
+            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
             retval = -results[0][0] # minimize, after all!
         except RuntimeError:
             # can't fit, no resonance there
@@ -701,7 +701,7 @@ def autoalign_NM(auto, xatol, limits, init_simplex, max_iters=None, fit_win=100,
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
-    res = minimize(this_NMeval, start_pos_no_z, method='Nelder-Mead', bounds=bounds, options={'maxiter': max_iters, 'xatol': xatol, 'disp':True, 'initial_simplex':init_simplex, 'return_all':True})
+    res = minimize(this_NMeval, start_pos_no_z, method='Nelder-Mead', bounds=bounds, options={'maxiter': max_iters, 'xatol': xatol, 'fatol': 1e6, 'disp':True, 'initial_simplex':init_simplex, 'return_all':True})
 
     print(res)
 
@@ -988,6 +988,19 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 
     # save, plot, etc.
 
+def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, save=True, plot=False):
+    """
+    Give an automate class instance to work with,
+    autoalign_func the function which performs the autoalign,
+    args positional args to the autoalign_func,
+    kwargs keyword args to the autoalign_func,
+    init_poss intital positions to align from. shape[0] determines number of autoaligns are performed.
+    (should be shape (N, 6))
+    save & plot: whether to save/plot result
+    """
+    pass
+
+
 
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
@@ -1083,7 +1096,7 @@ def main():
         [0, 0, 0, 0, sp[5]-delta]
     ])
 
-    autoalign_NM(auto, 3e-3, [0.05, 0.1, 0.1, 0.05, 0.05], init_simplex=init_simplex, max_iters=15, fit_win=300, plot=True)
+    autoalign_NM(auto, 1e-3, [0.05, 0.1, 0.1, 0.05, 0.05], init_simplex=init_simplex, max_iters=50, fit_win=200, plot=True)
     plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
