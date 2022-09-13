@@ -61,8 +61,8 @@ def main():
     fid_f /= N
 
     # number of points in each direction
-    resy = 1
-    resz = 1
+    resy = 5
+    resz = 5
 
     deltas = np.zeros((2,resz,resy)) #this is hardcoded for grid pattern
 
