@@ -339,6 +339,25 @@ class AutoScanner():
         self.hexstatus = 'stop'
         return responses, freqs, collision
 
+    def wiggle_absolute_move(self, pos, wiggle_mag=1e-3):
+        """
+        Do an absolute move with a negative then positive relative move in all but Z afterwards
+        ensures that pos is always approached from the same direction, eliminatin backlash
+        pos is a 6-long array of absolute positions to move to, X Y Z U V W
+        """
+        abs_step = {}
+        for i, coord in enumerate(["X", "Y", "Z", "U", "V", "W"]):
+            abs_step[coord] = pos[i]
+
+        self.absolute_move(abs_step)
+        wiggle_step = {}
+        wiggle_back_step = {}
+        for coord in ["dX", "dY", "dU", "dV", "dW"]:
+            wiggle_step[coord] = wiggle_mag
+            wiggle_back_step[coord] = -wiggle_mag
+        self.incremental_move(wiggle_back_step)
+        self.incremental_move(wiggle_step)
+
     def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, wiggle_mag=0.001):
         """
         Take in an absolute position.
@@ -347,23 +366,8 @@ class AutoScanner():
         Need Z_pos arg to keep Z in the same place.
         positions is just X Y U V W
         """
-        abs_pos = {}
-        abs_pos["X"] = positions[0]
-        abs_pos["Y"] = positions[1]
-        abs_pos["Z"] = Z_pos
-        abs_pos["U"] = positions[2]
-        abs_pos["V"] = positions[3]
-        abs_pos["W"] = positions[4]
-        # I'm never going to have to future-proof that, I live in 3d <-(clueless)
-        self.absolute_move(abs_pos)
-        # wiggle to ensure position always approached from the same direction
-        wiggle_step = {}
-        wiggle_back_step = {}
-        for coord in ["dX", "dY", "dU", "dV", "dW"]:
-            wiggle_step[coord] = wiggle_mag
-            wiggle_back_step[coord] = -wiggle_mag
-        self.incremental_move(wiggle_back_step)
-        self.incremental_move(wiggle_step)
+        all_pos = [*positions[:2], Z_pos, *positions[2:]]
+        self.wiggle_absolute_move(all_pos)
         time.sleep(delay)
         response = self.na.get_pna_response()
         try:
@@ -681,7 +685,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, limits, init_simplex, max_iters=None, fit_win=100, wiggle_mag=0.001, plot=False):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, wiggle_mag=0.001, plot=False):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
@@ -701,12 +705,12 @@ def autoalign_NM(auto, xatol, limits, init_simplex, max_iters=None, fit_win=100,
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
-    res = minimize(this_NMeval, start_pos_no_z, method='Nelder-Mead', bounds=bounds, options={'maxiter': max_iters, 'xatol': xatol, 'fatol': 1e6, 'disp':True, 'initial_simplex':init_simplex, 'return_all':True})
+    res = minimize(this_NMeval, start_pos_no_z, method='Nelder-Mead', bounds=bounds, options={'maxiter': max_iters, 'xatol': xatol, 'fatol': fatol, 'disp':True, 'initial_simplex':init_simplex, 'return_all':True})
 
     print(res)
 
     # get the wedge in optimal position
-    auto.NMeval(res['x'], Z_pos, freqs, fit_win, wiggle_mag=wiggle_mag)
+    auto.wiggle_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
 
     if plot == True:
 
@@ -988,19 +992,38 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 
     # save, plot, etc.
 
-def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, save=True, plot=False):
+def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, save_path=None):
     """
     Give an automate class instance to work with,
     autoalign_func the function which performs the autoalign,
     args positional args to the autoalign_func,
     kwargs keyword args to the autoalign_func,
     init_poss intital positions to align from. shape[0] determines number of autoaligns are performed.
-    (should be shape (N, 6))
+    (should be shape (N, 6), each one in X Y Z U V W order)
     save & plot: whether to save/plot result
     """
-    pass
+    aligned_poss = 0*init_poss
 
+    if save_path:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        initname = f"{save_path}/autoalign_hist_init_poss_{timestamp}"
+        alignedname = f"{save_path}/autoalign_hist_aligned_poss_{timestamp}"
+        print(f"going to save to {initname}, {aligned_name}")
 
+    for i, pos in enumerate(init_poss):
+        
+        auto.wiggle_absolute_move(pos)
+
+        autoalign_func(*args, **kwargs)
+
+        _, current_pos = auto.hexa.get_position()
+        aligned_poss[i] = current_pos
+    
+    if save_path:
+        print(f"saving to {initname}, {aligned_name}")
+        np.save(initname, init_poss)
+        np.save(alignedname, aligned_poss)
+        print(f"SAVED.")
 
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
@@ -1096,8 +1119,8 @@ def main():
         [0, 0, 0, 0, sp[5]-delta]
     ])
 
-    autoalign_NM(auto, 1e-3, [0.05, 0.1, 0.1, 0.05, 0.05], init_simplex=init_simplex, max_iters=50, fit_win=200, plot=True)
-    plt.show()
+    autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=False)
+    #plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
