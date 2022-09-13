@@ -121,6 +121,16 @@ class NetworkAnalyzer:
 
     def get_pna_response(self):
         str_res = self.send_command(["CALC:DATA? FDATA"])
+        attempts = 10
+        while attempts > 0:
+            str_res = self.send_command(["CALC:DATA? FDATA"])
+            attempts -= 1
+            if str_res != '':
+                break
+        else:
+            print("VNA returned emtpy string 10 times in a row, exiting...")
+            exit(1)
+        
         return np.array(str_res.split(','), dtype=float)
 
     def get_pna_complex_response(self):

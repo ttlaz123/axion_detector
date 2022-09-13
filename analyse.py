@@ -214,7 +214,7 @@ def get_turning_point_fits(responses, coord, coord_poss, start_pos, freqs, fit_d
 
     coord_num = np.where(np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']) == coord)[0]
 
-    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=False)
+    results = get_fundamental_freqs(responses,freqs, fit_win=fit_win, plot=True)
     ffreqs = results[:,0].T
     errs = results[:,1].T
     
