@@ -357,9 +357,13 @@ class AutoScanner():
         # I'm never going to have to future-proof that, I live in 3d <-(clueless)
         self.absolute_move(abs_pos)
         # wiggle to ensure position always approached from the same direction
+        wiggle_step = {}
+        wiggle_back_step = {}
         for coord in ["dX", "dY", "dU", "dV", "dW"]:
-            self.incremental_move({coord:-wiggle_mag})
-            self.incremental_move({coord:wiggle_mag})
+            wiggle_step[coord] = wiggle_mag
+            wiggle_back_step[coord] = -wiggle_mag
+        self.incremental_move(wiggle_back_step)
+        self.incremental_move(wiggle_step)
         time.sleep(delay)
         response = self.na.get_pna_response()
         try:
@@ -1079,7 +1083,7 @@ def main():
         [0, 0, 0, 0, sp[5]-delta]
     ])
 
-    autoalign_NM(auto, 3e-3, [0.05, 0.1, 0.1, 0.05, 0.05], init_simplex=init_simplex, max_iters=1000, fit_win=300, plot=True)
+    autoalign_NM(auto, 3e-3, [0.05, 0.1, 0.1, 0.05, 0.05], init_simplex=init_simplex, max_iters=15, fit_win=300, plot=True)
     plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
