@@ -992,7 +992,7 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 
     # save, plot, etc.
 
-def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, save_path=None):
+def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=200, save_path=None):
     """
     Give an automate class instance to work with,
     autoalign_func the function which performs the autoalign,
@@ -1001,28 +1001,40 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, save_path
     init_poss intital positions to align from. shape[0] determines number of autoaligns are performed.
     (should be shape (N, 6), each one in X Y Z U V W order)
     save & plot: whether to save/plot result
+    fit_win is for the fit of resonance at aligned pos to get fres
     """
     aligned_poss = 0*init_poss
+    aligned_freqs = np.zeros((init_poss.shape[0], 1))
+    aligned_freqs_err = np.zeros((init_poss.shape[0], 1))
+
+    freqs = auto.na.get_pna_freq()
 
     if save_path:
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        initname = f"{save_path}/autoalign_hist_init_poss_{timestamp}"
-        alignedname = f"{save_path}/autoalign_hist_aligned_poss_{timestamp}"
-        print(f"going to save to {initname}, {aligned_name}")
+        filename = f"{save_path}/autoalign_hist_{timestamp}"
+        print(f"going to save to {filename}")
 
     for i, pos in enumerate(init_poss):
         
+        print("Moving to new initial position")
         auto.wiggle_absolute_move(pos)
 
+        print("begin autoalign")
         autoalign_func(*args, **kwargs)
+        print("aligned")
 
         _, current_pos = auto.hexa.get_position()
         aligned_poss[i] = current_pos
+
+        response = auto.na.get_pna_response()
+        results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
+        aligned_freqs[i] = results[0][0]
+        aligned_freqs_err[i] = results[0][1]
     
     if save_path:
-        print(f"saving to {initname}, {aligned_name}")
-        np.save(initname, init_poss)
-        np.save(alignedname, aligned_poss)
+        print(f"saving to {filename}")
+        savearr = np.hstack((init_poss, aligned_poss, aligned_freqs, aligned_freqs_err))
+        np.save(filename, savearr)
         print(f"SAVED.")
 
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
@@ -1103,23 +1115,25 @@ def main():
     #scan_one_antiskip(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     #scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     
-    freq = na.get_pna_freq()
-    _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
+    #freq = na.get_pna_freq()
+    #_, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
-    delta = 0.001
+    save_path = "autoalign_hist_data"
 
-    sp = [3.170997011, -0.667151318, 10.008791627, -0.132002884, 0.7420093, 0.780037639]
+    rng = np.random.default_rng()
 
-    init_simplex = np.array([
-        [sp[0]+delta, sp[1]+delta, sp[3]+delta, sp[4]+delta, sp[5]+delta],
-        [sp[0]+delta, sp[1]+delta, sp[3]+delta, sp[4]-delta, sp[5]+delta],
-        [sp[0]+delta, sp[1]+delta, sp[3]-delta, sp[4]+delta, sp[5]+delta],
-        [sp[0]+delta, sp[1]-delta, sp[3]+delta, sp[4]+delta, sp[5]+delta],
-        [sp[0]-delta, sp[1]+delta, sp[3]+delta, sp[4]+delta, sp[5]+delta],
-        [0, 0, 0, 0, sp[5]-delta]
-    ])
+    N = 2
+    init_poss = np.zeros((N,6))
 
-    autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=False)
+    delta = 0.01
+    min_poss = [3.17-delta, -0.66-delta, 10.00812874393, -0.13-delta, 0.74-delta, 0.78-delta] 
+    max_poss = [3.17+delta, -0.66+delta, 10.00812874393, -0.13+delta, 0.74+delta, 0.78+delta]
+    for i in range(6):
+        init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
+
+    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.05, 0.1, 0.1, 0.05, 0.05]], {'max_iters':50, 'fit_win':200, 'wiggle_mag':0, 'plot':False}, fit_win=200, save_path=save_path)
+
+    #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
     #plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
