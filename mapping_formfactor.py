@@ -1,7 +1,8 @@
 import numpy as np
 import color_map # has data reading functions
 
-fname = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_132445.csv'
+#fname = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_132445.csv'
+fname = "/home/tdyson/coding/axion_detector/field_mapping_data/20220831_132445.csv"
 
 fres, deltas = color_map.read_deltas(fname, return_fres=True)
 
