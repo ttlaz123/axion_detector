@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220913_162645.csv'
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220914_122911.csv'
 
 def read_deltas(file, return_fres=False):
     with open(file) as f:
@@ -74,7 +74,7 @@ def plot_hists(deltas):
 
 def main():
     deltas = read_deltas(FILENAME)
-    plot_Es(deltas, mirror_rear=True)
+    plot_Es(deltas, mirror_rear=False)
     plt.show()
 
 if __name__ == '__main__':
