@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def load_data(save_path, fname):
+def load_data(save_path, fname, keep_fails=False):
     fullname = f"{save_path}/{fname}"
 
     din = np.load(fullname)
@@ -21,14 +21,15 @@ def load_data(save_path, fname):
         aligned_freqs = aligned_freqs[:end_ind]
         aligned_freqs_err = aligned_freqs_err[:end_ind]
 
-    # if an autoalign ended up somewhere where a resonance couldn't be fit to
-    nofit_inds = np.where(aligned_freqs == -1)[0]
-    if len(nofit_inds) > 0:
-        print(f"Some ({len(nofit_inds)}) aligns failed, here: {nofit_inds}")
-    init_poss = np.delete(init_poss, nofit_inds)
-    aligned_poss = np.delete(aligned_poss, nofit_inds)
-    aligned_freqs = np.delete(aligned_freqs, nofit_inds)
-    aligned_freqs_err = np.delete(aligned_freqs_err, nofit_inds)
+    if not keep_fails:
+        # if an autoalign ended up somewhere where a resonance couldn't be fit to, or it reported max iters.
+        nofit_inds = np.where(aligned_freqs < 0)[0]
+        if len(nofit_inds) > 0:
+            print(f"Some ({len(nofit_inds)}) aligns failed, here: {nofit_inds}")
+        init_poss = np.delete(init_poss, nofit_inds)
+        aligned_poss = np.delete(aligned_poss, nofit_inds)
+        aligned_freqs = np.delete(aligned_freqs, nofit_inds)
+        aligned_freqs_err = np.delete(aligned_freqs_err, nofit_inds)
 
     return init_poss, aligned_poss, aligned_freqs, aligned_freqs_err
 

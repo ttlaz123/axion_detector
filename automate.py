@@ -726,6 +726,8 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
             plt.plot(hist[i])
             plt.ylabel(coords[i])
 
+    return res['success']
+
 
 def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
     '''
@@ -789,12 +791,13 @@ def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5
         print(f"deltas: {deltas}")
         print(f"aligned pos: {start_pos}")
         #auto.webhook.send('Autoalign FAILED, exiting')
-        exit(-1)
+        return False
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
         print(f"deltas: {deltas}")
         print(f"aligned pos: {start_pos}")
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+        return True
 
 def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''
@@ -904,10 +907,11 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
         #auto.webhook.send('Autoalign FAILED, exiting')
-        exit(-1)
+        return False
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+        return True
 
 def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
     '''
@@ -995,7 +999,7 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=200, save_path=None):
     """
     Give an automate class instance to work with,
-    autoalign_func the function which performs the autoalign,
+    autoalign_func the function which performs the autoalign, should return truthy if success, fasley if failed. 
     args positional args to the autoalign_func,
     kwargs keyword args to the autoalign_func,
     init_poss intital positions to align from. shape[0] determines number of autoaligns are performed.
@@ -1004,8 +1008,9 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
     fit_win is for the fit of resonance at aligned pos to get fres
 
     saves incrementally, so any columns of zeros means it didn't get to the end successfully.
-    if the resonant freq and error are -1, it means it didn't find a lorentz fit to the final resonance,
+    if the resonant freq and error are -2, it means it didn't find a lorentz fit to the final resonance,
     probably the align was messed up somehow, and should be ignored.
+    if they're -1, it means the autoalign function reported failure, probably max iters reached.
     """
     aligned_poss = 0*init_poss
     aligned_freqs = np.zeros((init_poss.shape[0], 1))
@@ -1024,21 +1029,28 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
         auto.wiggle_absolute_move(pos)
 
         print("begin autoalign")
-        autoalign_func(*args, **kwargs)
+        success = autoalign_func(*args, **kwargs)
 
-        _, current_pos = auto.hexa.get_position()
-        aligned_poss[i] = current_pos
+        if success:
 
-        response = auto.na.get_pna_response()
-        try:
-            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
-            aligned_freqs[i] = results[0][0]
-            aligned_freqs_err[i] = results[0][1]
-            print("aligned")
-        except RuntimeError:
+            _, current_pos = auto.hexa.get_position()
+            aligned_poss[i] = current_pos
+
+            response = auto.na.get_pna_response()
+            try:
+                results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
+                aligned_freqs[i] = results[0][0]
+                aligned_freqs_err[i] = results[0][1]
+                print("aligned")
+            except RuntimeError:
+                aligned_freqs[i] = -2
+                aligned_freqs_err[i] = -2
+                print("autoalign got to a place w/ no resonance")
+        else:
             aligned_freqs[i] = -1
             aligned_freqs_err[i] = -1
-            print("autoalign failed")
+            print("autoalign reported failure")
+        
             
         if save_path:
             print(f"saving to {filename}")
