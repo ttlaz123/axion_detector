@@ -692,7 +692,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     always aligns over all dofs but Z.
 
     xatol is the same as defined in scipy.optimize.minimize, that is the maximum distance between points in the simplex for conversion
-    limits is the margin for movement given for each parameter, from the starting position.
+    limits is the margin for movement given for each parameter (no Z), from the starting position.
     max_iters is sraightforward
     fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
     """
@@ -1002,6 +1002,10 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
     (should be shape (N, 6), each one in X Y Z U V W order)
     save & plot: whether to save/plot result
     fit_win is for the fit of resonance at aligned pos to get fres
+
+    saves incrementally, so any columns of zeros means it didn't get to the end successfully.
+    if the resonant freq and error are -1, it means it didn't find a lorentz fit to the final resonance,
+    probably the align was messed up somehow, and should be ignored.
     """
     aligned_poss = 0*init_poss
     aligned_freqs = np.zeros((init_poss.shape[0], 1))
@@ -1021,21 +1025,28 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
 
         print("begin autoalign")
         autoalign_func(*args, **kwargs)
-        print("aligned")
 
         _, current_pos = auto.hexa.get_position()
         aligned_poss[i] = current_pos
 
         response = auto.na.get_pna_response()
-        results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
-        aligned_freqs[i] = results[0][0]
-        aligned_freqs_err[i] = results[0][1]
-    
-    if save_path:
-        print(f"saving to {filename}")
-        savearr = np.hstack((init_poss, aligned_poss, aligned_freqs, aligned_freqs_err))
-        np.save(filename, savearr)
-        print(f"SAVED.")
+        try:
+            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
+            aligned_freqs[i] = results[0][0]
+            aligned_freqs_err[i] = results[0][1]
+            print("aligned")
+        except RuntimeError:
+            aligned_freqs[i] = -1
+            aligned_freqs_err[i] = -1
+            print("autoalign failed")
+            
+        if save_path:
+            print(f"saving to {filename}")
+            savearr = np.hstack((init_poss, aligned_poss, aligned_freqs, aligned_freqs_err))
+            np.save(filename, savearr)
+            print("SAVED.")
+
+    print("FINISHED.")
 
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
@@ -1122,16 +1133,16 @@ def main():
 
     rng = np.random.default_rng()
 
-    N = 2
+    N = 100
     init_poss = np.zeros((N,6))
 
     delta = 0.01
-    min_poss = [3.17-delta, -0.66-delta, 10.00812874393, -0.13-delta, 0.74-delta, 0.78-delta] 
-    max_poss = [3.17+delta, -0.66+delta, 10.00812874393, -0.13+delta, 0.74+delta, 0.78+delta]
+    min_poss = [3.17-delta, -0.66-delta, 10.00, -0.13-delta, 0.74-delta, 0.78-delta] 
+    max_poss = [3.17+delta, -0.66+delta, 10.00, -0.13+delta, 0.74+delta, 0.78+delta]
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
-    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.05, 0.1, 0.1, 0.05, 0.05]], {'max_iters':50, 'fit_win':200, 'wiggle_mag':0, 'plot':False}, fit_win=200, save_path=save_path)
+    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.02, 0.1, 0.2, 0.05, 0.02]], {'max_iters':100, 'fit_win':200, 'wiggle_mag':0, 'plot':False}, fit_win=200, save_path=save_path)
 
     #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
     #plt.show()
