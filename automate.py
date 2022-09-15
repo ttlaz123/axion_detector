@@ -358,7 +358,7 @@ class AutoScanner():
         self.incremental_move(wiggle_back_step)
         self.incremental_move(wiggle_step)
 
-    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, wiggle_mag=0.001):
+    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, wiggle_mag=0.001, navg=1):
         """
         Take in an absolute position.
         Get the resonant frequency from get_fundamental_freqs (but only one row)
@@ -367,11 +367,14 @@ class AutoScanner():
         positions is just X Y U V W
         """
         all_pos = [*positions[:2], Z_pos, *positions[2:]]
-        self.wiggle_absolute_move(all_pos)
+        self.wiggle_absolute_move(all_pos, wiggle_mag)
         time.sleep(delay)
-        response = self.na.get_pna_response()
+        response = 0*freqs
+        for i in range(navg):
+            response += self.na.get_pna_response()
+        response /= navg
         try:
-            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
+            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=True)
             retval = -results[0][0] # minimize, after all!
         except RuntimeError:
             # can't fit, no resonance there
@@ -685,7 +688,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, wiggle_mag=0.001, plot=False):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, wiggle_mag=0.001, navg=1, plot=False):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
@@ -694,6 +697,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     xatol is the same as defined in scipy.optimize.minimize, that is the maximum distance between points in the simplex for conversion
     limits is the margin for movement given for each parameter (no Z), from the starting position.
     max_iters is sraightforward
+    navg is number of VNA responses to take and average before fitting to lorentz
     fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
     """
     
@@ -701,7 +705,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     freqs = auto.na.get_pna_freq()
     Z_pos = start_pos[2]
 
-    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, wiggle_mag=wiggle_mag)
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, wiggle_mag=wiggle_mag, navg=navg)
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
@@ -710,7 +714,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     print(res)
 
     # get the wedge in optimal position
-    auto.wiggle_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
+    auto.wiggle_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]], wiggle_mag=wiggle_mag)
 
     if plot == True:
 
@@ -1145,7 +1149,7 @@ def main():
 
     rng = np.random.default_rng()
 
-    N = 100
+    N = 10
     init_poss = np.zeros((N,6))
 
     delta = 0.01
@@ -1154,7 +1158,7 @@ def main():
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
-    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.02, 0.1, 0.2, 0.05, 0.02]], {'max_iters':100, 'fit_win':200, 'wiggle_mag':0, 'plot':False}, fit_win=200, save_path=save_path)
+    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.02, 0.1, 0.2, 0.05, 0.02]], {'max_iters':150, 'fit_win':200, 'wiggle_mag':0, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
     #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
     #plt.show()

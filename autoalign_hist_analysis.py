@@ -33,7 +33,10 @@ def load_data(save_path, fname, keep_fails=False):
 
     return init_poss, aligned_poss, aligned_freqs, aligned_freqs_err
 
-init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_data("autoalign_hist_data", "autoalign_hist_20220913_143118.npy")
+save_path="autoalign_hist_data"
+fname = "autoalign_hist_20220915_133733.npy"
+
+init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_data(save_path,fname, keep_fails=False)
 
 plt.hist(aligned_freqs)
 plt.show()

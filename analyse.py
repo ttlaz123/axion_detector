@@ -204,8 +204,8 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
             x = np.linspace(win_freq[0], win_freq[-1], 1000)
             plt.plot(x, skewed_lorentzian(x, *popt), 'r')
             plt.axis('off')
-            #plt.figure()
-            #plt.plot(freqs, responses[n] - skewed_lorentzian(freqs, *popt), 'k.')
+            plt.figure()
+            plt.plot(freqs, responses[n] - skewed_lorentzian(freqs, *popt), 'k.')
 
     if plot:
         plt.show()
