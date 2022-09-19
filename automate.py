@@ -358,6 +358,16 @@ class AutoScanner():
         self.incremental_move(wiggle_back_step)
         self.incremental_move(wiggle_step)
 
+    def fromarray_absolute_move(self, pos):
+        """
+        do an abs move taking in a list of coords in X Y Z U V W order.
+        """
+        abs_step = {}
+        for i, coord in enumerate(["X", "Y", "Z", "U", "V", "W"]):
+            abs_step[coord] = pos[i]
+        self.absolute_move(abs_step)
+
+
     def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, navg=1):
         """
         Take in an absolute position.
@@ -367,7 +377,7 @@ class AutoScanner():
         positions is just X Y U V W
         """
         all_pos = [*positions[:2], Z_pos, *positions[2:]]
-        self.absolute_move(all_pos, wiggle_mag)
+        self.fromarray_absolute_move(all_pos)
         time.sleep(delay)
         response = 0*freqs
         for i in range(navg):
@@ -714,7 +724,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     print(res)
 
     # get the wedge in optimal position
-    auto.absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
+    auto.fromarray_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
 
     if plot == True:
 
@@ -1030,7 +1040,7 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
     for i, pos in enumerate(init_poss):
         
         print("Moving to new initial position")
-        auto.absolute_move(pos)
+        auto.fromarray_absolute_move(pos)
 
         print("begin autoalign")
         success = autoalign_func(*args, **kwargs)
@@ -1159,7 +1169,7 @@ def main():
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
     autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
-    {'max_iters':150, 'fit_win':200, 'wiggle_mag':0, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
+    {'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
     #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
     #plt.show()
