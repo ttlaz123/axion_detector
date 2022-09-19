@@ -358,7 +358,7 @@ class AutoScanner():
         self.incremental_move(wiggle_back_step)
         self.incremental_move(wiggle_step)
 
-    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, wiggle_mag=0.001, navg=1):
+    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, navg=1):
         """
         Take in an absolute position.
         Get the resonant frequency from get_fundamental_freqs (but only one row)
@@ -367,14 +367,14 @@ class AutoScanner():
         positions is just X Y U V W
         """
         all_pos = [*positions[:2], Z_pos, *positions[2:]]
-        self.wiggle_absolute_move(all_pos, wiggle_mag)
+        self.absolute_move(all_pos, wiggle_mag)
         time.sleep(delay)
         response = 0*freqs
         for i in range(navg):
             response += self.na.get_pna_response()
         response /= navg
         try:
-            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=True)
+            results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
             retval = -results[0][0] # minimize, after all!
         except RuntimeError:
             # can't fit, no resonance there
@@ -688,7 +688,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, wiggle_mag=0.001, navg=1, plot=False):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, plot=False):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
@@ -705,7 +705,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     freqs = auto.na.get_pna_freq()
     Z_pos = start_pos[2]
 
-    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, wiggle_mag=wiggle_mag, navg=navg)
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg)
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
@@ -714,7 +714,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     print(res)
 
     # get the wedge in optimal position
-    auto.wiggle_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]], wiggle_mag=wiggle_mag)
+    auto.absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
 
     if plot == True:
 
@@ -1030,7 +1030,7 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
     for i, pos in enumerate(init_poss):
         
         print("Moving to new initial position")
-        auto.wiggle_absolute_move(pos)
+        auto.absolute_move(pos)
 
         print("begin autoalign")
         success = autoalign_func(*args, **kwargs)
@@ -1149,7 +1149,7 @@ def main():
 
     rng = np.random.default_rng()
 
-    N = 10
+    N = 100
     init_poss = np.zeros((N,6))
 
     delta = 0.01
@@ -1158,7 +1158,8 @@ def main():
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
-    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.02, 0.1, 0.2, 0.05, 0.02]], {'max_iters':150, 'fit_win':200, 'wiggle_mag':0, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
+    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
+    {'max_iters':150, 'fit_win':200, 'wiggle_mag':0, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
     #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
     #plt.show()
