@@ -26,7 +26,6 @@ def load_data(save_path, fname, keep_fails=False):
     if not keep_fails:
         # if an autoalign ended up somewhere where a resonance couldn't be fit to, or it reported max iters.
         nofit_inds = np.where(aligned_freqs < 0)[0]
-        print(nofit_inds)
         if len(nofit_inds) > 0:
             print(f"Some ({len(nofit_inds)}) aligns failed, here: {nofit_inds}")
         init_poss = np.delete(init_poss, nofit_inds, axis=0)
@@ -37,7 +36,7 @@ def load_data(save_path, fname, keep_fails=False):
     return init_poss, aligned_poss, aligned_freqs, aligned_freqs_err
 
 save_path="autoalign_hist_data"
-fname = "autoalign_hist_20220916_171219.npy"
+fname = "autoalign_hist_20220919_143431.npy"
 
 init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_data(save_path,fname, keep_fails=False)
 
@@ -49,7 +48,7 @@ print(np.mean(aligned_freqs), np.std(aligned_freqs))
 plt.figure()
 coords = ['X', 'Y', 'Z', 'U', 'V', 'W']
 n = np.arange(init_poss.shape[0])
-ind = 39
+ind = 88
 for i,coord in enumerate(coords):
     plt.subplot(231+i)
     plt.scatter(init_poss[:,i], aligned_poss[:,i], c=n)
