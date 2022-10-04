@@ -11,7 +11,7 @@ def load_data(save_path, fname, keep_fails=False):
     aligned_freqs = din[:,12]
     aligned_freqs_err = din[:,13]
 
-    print(f"loaded file with {init_poss.shape[0]} aligns")
+    print(f"loaded {save_path}/{fname} with {init_poss.shape[0]} aligns")
 
     # if the run ended early there will be zeros
     end_inds = np.where(aligned_freqs == 0)[0]
@@ -35,31 +35,46 @@ def load_data(save_path, fname, keep_fails=False):
 
     return init_poss, aligned_poss, aligned_freqs, aligned_freqs_err
 
-save_path="autoalign_hist_data"
-fname = "autoalign_hist_20220919_143431.npy"
+if __name__=="__main__":
+	save_path="autoalign_hist_data"
+	fname_dout = "autoalign_hist_20220919_143431.npy"
+	fname_din = 'autoalign_hist_20220916_171219.npy'
 
-init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_data(save_path,fname, keep_fails=False)
+	init_poss_o, aligned_poss_o, aligned_freqs_o, aligned_freqs_err_o = load_data(save_path,fname_dout, keep_fails=False)
+	init_poss_i, aligned_poss_i, aligned_freqs_i, aligned_freqs_err_i = load_data(save_path,fname_din, keep_fails=False)
 
-init_poss = init_poss.reshape(-1,6)
+	init_poss_o = init_poss_o.reshape(-1,6)
+	init_poss_i = init_poss_i.reshape(-1,6)
 
-plt.hist(aligned_freqs)
-print(np.mean(aligned_freqs), np.std(aligned_freqs))
+	'''
+	# FREQ HISTOGRAM COMPARISON
+	bins = np.linspace(7.52944,7.53168,30)
+	plt.hist(aligned_freqs_o*1e-9, bins=bins, alpha=0.5, label="Disks Out")
+	plt.hist(aligned_freqs_i*1e-9, bins=bins, alpha=0.5, label="Disks In")
+	plt.axvline(np.median(aligned_freqs_o*1e-9), c='b', ls='--', label="Disks Out Median")
+	plt.axvline(np.median(aligned_freqs_i*1e-9), c='orange', ls='--', label="Disks In Median")
+	plt.title("Aligned Resonant Frequency")
+	plt.ylabel("Count")
+	plt.xlabel("Frequency (GHz)")
+	plt.legend()
 
-plt.figure()
-coords = ['X', 'Y', 'Z', 'U', 'V', 'W']
-n = np.arange(init_poss.shape[0])
-ind = 88
-for i,coord in enumerate(coords):
-    plt.subplot(231+i)
-    plt.scatter(init_poss[:,i], aligned_poss[:,i], c=n)
-    plt.scatter(init_poss[ind,i], aligned_poss[ind,i], c='red')
-    plt.title(f"Alignment Scatter in {coord}")
-    plt.ylabel("Aligned Position (hexa coords)")
-    plt.xlabel("Initial Position (hexa coords)")
+	print(np.median(aligned_freqs_o)-np.median(aligned_freqs_i))
+	'''
+	plt.figure()
+	coords = ['X', 'Y', 'Z', 'U', 'V', 'W']
+	n = np.arange(init_poss_o.shape[0])
+	ind = 88
+	for i,coord in enumerate(coords):
+	    plt.subplot(231+i)
+	    plt.scatter(init_poss_o[:,i], aligned_poss_o[:,i], c=n)
+	    plt.scatter(init_poss_o[ind,i], aligned_poss_o[ind,i], c='red')
+	    plt.title(f"Alignment Scatter in {coord}")
+	    plt.ylabel("Aligned Position (hexa coords)")
+	    plt.xlabel("Initial Position (hexa coords)")
 
-plt.figure()
-plt.scatter(n, aligned_freqs_err, c=n)
-plt.scatter(n[ind], aligned_freqs_err[ind], c='red')
-plt.title("Error in Fit to Aligned Frequency")
+	plt.figure()
+	plt.scatter(n, aligned_freqs_err_o, c=n)
+	plt.scatter(n[ind], aligned_freqs_err_o[ind], c='red')
+	plt.title("Error in Fit to Aligned Frequency")
 
-plt.show()
+	plt.show()
