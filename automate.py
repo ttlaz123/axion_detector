@@ -1118,9 +1118,9 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
     
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
+    parser.add_argument('-i', '--hex_ip', default='192.168.254.85',
                     help='IP address to connect to the NewportXPS hexapod')
-    parser.add_argument('-j', '--pos_ip', default='192.168.0.254',
+    parser.add_argument('-j', '--pos_ip', default='192.168.254.23',
                     help='IP address to connect to the NewportXPS positioner')
     parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
     parser.add_argument('-q', '--pos_password', help='Password to connect to the NewportXPS positioner' )
@@ -1134,7 +1134,7 @@ def main():
     if(IP == 'x'):
         pos = None
     else:
-        pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
+        pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)#, stage_name="IMS100V")
     hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)#,xps=pos.get_xps())
     na = na_tracer.NetworkAnalyzer()
 
@@ -1152,8 +1152,8 @@ def main():
     #scan_one_antiskip(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     #scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     
-    #freq = na.get_pna_freq()
-    #_, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
+    freq = na.get_pna_freq()
+    _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
     save_path = "autoalign_hist_data"
 
@@ -1168,17 +1168,17 @@ def main():
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
-    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
-    {'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
+    #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
+    #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
-    #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
-    #plt.show()
+    autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, plot=True)
+    plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None
-    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.0005, 0.0005, 0.005, 0.0005, 0.0005], N=50, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=True, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.0005, 0.0005, 0.005, 0.0005, 0.0005], N=50, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=False, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=False, harmon=harmon)
     #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=50, coarse_ranges=np.array([0.2,0.2,0.05,0.05]), fine_ranges=np.array([0.02,0.075,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #autoalign(auto, ['dX'], [0.001], N=50, coarse_ranges=np.array([0.2]), fine_ranges=np.array([0.02]), skip_coarse=True, search_orders=['fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     '''
