@@ -129,7 +129,7 @@ def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
 
 
 
-def get_lorentz_fit(freqs, spec):
+def get_lorentz_fit(freqs, spec, get_cov=False):
 
     # define the initial guesses
     bkg = (spec[0]+spec[-1])/2
@@ -146,15 +146,15 @@ def get_lorentz_fit(freqs, spec):
 
     popt,pcov = curve_fit(skewed_lorentzian,freqs,spec,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],method='lm')
 
-    return popt
+    if get_cov:
+        retval = popt, pcov
+    else:
+        retval = popt
+
+    return retval
 
 def chan2freq(chan,freqs):
     return chan*(freqs[-1]-freqs[0])/freqs.size+freqs[0]
-
-class autoaligner():
-    pass
-    #def __init__(self, search_order='fwd', )
-        # describe all the knobs to turn
 
 def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False):
     '''
