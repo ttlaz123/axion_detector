@@ -11,13 +11,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220830_171933.csv'
-
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220914_122911.csv'
 
 def read_deltas(file, return_fres=False):
     with open(file) as f:
         vals = f.readlines()
-        #this works provided the measurements were taken in a square pattern:
+        #this works provided the measurements were taken in a square:
         dim = int(math.sqrt((len(vals) - 1) // 2 ))
         deltas = np.zeros((2, dim, dim))
         counter = 0
@@ -47,6 +46,21 @@ def plot_deltas(deltas):
     #plt.savefig(f'field_mapping_plots\\rear_{filename}.png')
     plt.show()
 
+def plot_Es(deltas, mirror_rear=False):
+    Es = np.sqrt(-1*deltas)
+    plt.figure()
+    plt.title("Front Map")
+    plt.imshow(Es[0], aspect='auto', interpolation='none', cmap='Spectral_r')
+    plt.colorbar(label='E Field (arb. units)')
+    #plt.savefig(f'field_mapping_plots\\front_{filename}.png')
+    if mirror_rear:
+        Es[1] = np.flip(Es[1], axis=1)
+    plt.figure()
+    plt.title("Rear Map")
+    plt.imshow(Es[1], aspect='auto', interpolation='none', cmap='Spectral_r')
+    plt.colorbar(label='E Field (arb. units)')
+    #plt.savefig(f'field_mapping_plots\\rear_{filename}.png')
+
 def plot_hists(deltas):
     bin_edges = np.linspace(np.min(deltas), np.max(deltas), 10)
     plt.figure()
@@ -60,7 +74,8 @@ def plot_hists(deltas):
 
 def main():
     deltas = read_deltas(FILENAME)
-    plot_deltas(deltas)
+    plot_Es(deltas, mirror_rear=False)
+    plt.show()
 
 if __name__ == '__main__':
     main()

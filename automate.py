@@ -358,7 +358,17 @@ class AutoScanner():
         self.incremental_move(wiggle_back_step)
         self.incremental_move(wiggle_step)
 
-    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, wiggle_mag=0.001):
+    def fromarray_absolute_move(self, pos):
+        """
+        do an abs move taking in a list of coords in X Y Z U V W order.
+        """
+        abs_step = {}
+        for i, coord in enumerate(["X", "Y", "Z", "U", "V", "W"]):
+            abs_step[coord] = pos[i]
+        self.absolute_move(abs_step)
+
+
+    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, navg=1):
         """
         Take in an absolute position.
         Get the resonant frequency from get_fundamental_freqs (but only one row)
@@ -367,9 +377,12 @@ class AutoScanner():
         positions is just X Y U V W
         """
         all_pos = [*positions[:2], Z_pos, *positions[2:]]
-        self.wiggle_absolute_move(all_pos)
+        self.fromarray_absolute_move(all_pos)
         time.sleep(delay)
-        response = self.na.get_pna_response()
+        response = 0*freqs
+        for i in range(navg):
+            response += self.na.get_pna_response()
+        response /= navg
         try:
             results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
             retval = -results[0][0] # minimize, after all!
@@ -685,15 +698,16 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, wiggle_mag=0.001, plot=False):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, plot=False):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
     always aligns over all dofs but Z.
 
     xatol is the same as defined in scipy.optimize.minimize, that is the maximum distance between points in the simplex for conversion
-    limits is the margin for movement given for each parameter, from the starting position.
+    limits is the margin for movement given for each parameter (no Z), from the starting position.
     max_iters is sraightforward
+    navg is number of VNA responses to take and average before fitting to lorentz
     fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
     """
     
@@ -701,7 +715,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     freqs = auto.na.get_pna_freq()
     Z_pos = start_pos[2]
 
-    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, wiggle_mag=wiggle_mag)
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg)
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
@@ -710,7 +724,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     print(res)
 
     # get the wedge in optimal position
-    auto.wiggle_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
+    auto.fromarray_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
 
     if plot == True:
 
@@ -725,6 +739,8 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
                 plt.subplot(511+i, sharex=ax1)
             plt.plot(hist[i])
             plt.ylabel(coords[i])
+
+    return res['success']
 
 
 def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5, max_iters=10, breakin=0.1, plot=False, save=True, fit_win=100):
@@ -789,12 +805,13 @@ def autoalign_fits(auto, coords, margins, ranges, degs=[2]*5, num_spectra=[20]*5
         print(f"deltas: {deltas}")
         print(f"aligned pos: {start_pos}")
         #auto.webhook.send('Autoalign FAILED, exiting')
-        exit(-1)
+        return False
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
         print(f"deltas: {deltas}")
         print(f"aligned pos: {start_pos}")
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+        return True
 
 def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters=10, search_orders=None, plot_coarse=False, plot_fine=False, save=True, skip_coarse=False, start_ind=0, stop_ind=-1, harmon=None):
     '''
@@ -904,10 +921,11 @@ def autoalign(auto, coords, margins, coarse_ranges, fine_ranges, N=20, max_iters
     if iter >= max_iters:
         print('autoalignment FAILED, max iters reached')
         #auto.webhook.send('Autoalign FAILED, exiting')
-        exit(-1)
+        return False
     else:
         print(f'autoalignment SUCCESS after {iter} iterations')
         #auto.webhook.send(f'Autoalign SUCCESS after {iter} iterations')
+        return True
 
 def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
     '''
@@ -995,13 +1013,18 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=200, save_path=None):
     """
     Give an automate class instance to work with,
-    autoalign_func the function which performs the autoalign,
+    autoalign_func the function which performs the autoalign, should return truthy if success, fasley if failed. 
     args positional args to the autoalign_func,
     kwargs keyword args to the autoalign_func,
     init_poss intital positions to align from. shape[0] determines number of autoaligns are performed.
     (should be shape (N, 6), each one in X Y Z U V W order)
     save & plot: whether to save/plot result
     fit_win is for the fit of resonance at aligned pos to get fres
+
+    saves incrementally, so any columns of zeros means it didn't get to the end successfully.
+    if the resonant freq and error are -2, it means it didn't find a lorentz fit to the final resonance,
+    probably the align was messed up somehow, and should be ignored.
+    if they're -1, it means the autoalign function reported failure, probably max iters reached.
     """
     aligned_poss = 0*init_poss
     aligned_freqs = np.zeros((init_poss.shape[0], 1))
@@ -1017,25 +1040,39 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
     for i, pos in enumerate(init_poss):
         
         print("Moving to new initial position")
-        auto.wiggle_absolute_move(pos)
+        auto.fromarray_absolute_move(pos)
 
         print("begin autoalign")
-        autoalign_func(*args, **kwargs)
-        print("aligned")
+        success = autoalign_func(*args, **kwargs)
 
-        _, current_pos = auto.hexa.get_position()
-        aligned_poss[i] = current_pos
+        if success:
 
-        response = auto.na.get_pna_response()
-        results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
-        aligned_freqs[i] = results[0][0]
-        aligned_freqs_err[i] = results[0][1]
-    
-    if save_path:
-        print(f"saving to {filename}")
-        savearr = np.hstack((init_poss, aligned_poss, aligned_freqs, aligned_freqs_err))
-        np.save(filename, savearr)
-        print(f"SAVED.")
+            _, current_pos = auto.hexa.get_position()
+            aligned_poss[i] = current_pos
+
+            response = auto.na.get_pna_response()
+            try:
+                results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
+                aligned_freqs[i] = results[0][0]
+                aligned_freqs_err[i] = results[0][1]
+                print("aligned")
+            except RuntimeError:
+                aligned_freqs[i] = -2
+                aligned_freqs_err[i] = -2
+                print("autoalign got to a place w/ no resonance")
+        else:
+            aligned_freqs[i] = -1
+            aligned_freqs_err[i] = -1
+            print("autoalign reported failure")
+        
+            
+        if save_path:
+            print(f"saving to {filename}")
+            savearr = np.hstack((init_poss, aligned_poss, aligned_freqs, aligned_freqs_err))
+            np.save(filename, savearr)
+            print("SAVED.")
+
+    print("FINISHED.")
 
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
@@ -1081,9 +1118,9 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
     
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--hex_ip', default='192.168.254.254',
+    parser.add_argument('-i', '--hex_ip', default='192.168.254.85',
                     help='IP address to connect to the NewportXPS hexapod')
-    parser.add_argument('-j', '--pos_ip', default='192.168.0.254',
+    parser.add_argument('-j', '--pos_ip', default='192.168.254.23',
                     help='IP address to connect to the NewportXPS positioner')
     parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
     parser.add_argument('-q', '--pos_password', help='Password to connect to the NewportXPS positioner' )
@@ -1097,7 +1134,7 @@ def main():
     if(IP == 'x'):
         pos = None
     else:
-        pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)
+        pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)#, stage_name="IMS100V")
     hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)#,xps=pos.get_xps())
     na = na_tracer.NetworkAnalyzer()
 
@@ -1115,32 +1152,33 @@ def main():
     #scan_one_antiskip(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     #scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
     
-    #freq = na.get_pna_freq()
-    #_, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
+    freq = na.get_pna_freq()
+    _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
 
     save_path = "autoalign_hist_data"
 
     rng = np.random.default_rng()
 
-    N = 2
+    N = 100
     init_poss = np.zeros((N,6))
 
     delta = 0.01
-    min_poss = [3.17-delta, -0.66-delta, 10.00812874393, -0.13-delta, 0.74-delta, 0.78-delta] 
-    max_poss = [3.17+delta, -0.66+delta, 10.00812874393, -0.13+delta, 0.74+delta, 0.78+delta]
+    min_poss = [3.17-delta, -0.66-delta, 10.00, -0.13-delta, 0.74-delta, 0.78-delta] 
+    max_poss = [3.17+delta, -0.66+delta, 10.00, -0.13+delta, 0.74+delta, 0.78+delta]
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
-    autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e5, [0.05, 0.1, 0.1, 0.05, 0.05]], {'max_iters':50, 'fit_win':200, 'wiggle_mag':0, 'plot':False}, fit_win=200, save_path=save_path)
+    #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
+    #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
-    #autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, wiggle_mag=0, plot=True)
-    #plt.show()
+    autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, plot=True)
+    plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.001, 0.001, 0.01, 0.001, 0.001], N=20, coarse_ranges=np.array([0.1,0.2,0.5,0.05,0.05]), fine_ranges=np.array([0.01,0.05,0.3,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd','rev'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #harmon = None
-    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.0005, 0.0005, 0.005, 0.0005, 0.0005], N=50, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=True, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
+    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.0005, 0.0005, 0.005, 0.0005, 0.0005], N=50, coarse_ranges=np.array([0.1,0.2,0.25,0.05,0.025]), fine_ranges=np.array([0.01,0.05,0.25,0.03,0.025]), skip_coarse=False, search_orders=['fwd','rev','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=False, harmon=harmon)
     #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.001, 0.001, 0.001, 0.001], N=50, coarse_ranges=np.array([0.2,0.2,0.05,0.05]), fine_ranges=np.array([0.02,0.075,0.03,0.03]), skip_coarse=True, search_orders=['fwd','rev','fwd','fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     #autoalign(auto, ['dX'], [0.001], N=50, coarse_ranges=np.array([0.2]), fine_ranges=np.array([0.02]), skip_coarse=True, search_orders=['fwd'], plot_coarse=True, plot_fine=True, save=True, harmon=harmon)
     '''
