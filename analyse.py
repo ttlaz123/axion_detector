@@ -185,7 +185,7 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
         skw = 0
 
         mintrans = bkg-responses[n].min()
-        min_ind = responses[n].argmin()
+        min_ind = get_fundamental_inds(responses, freqs)
         res_f = freqs[min_ind]
 
         win_freq = freqs[max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
