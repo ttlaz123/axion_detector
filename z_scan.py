@@ -39,9 +39,7 @@ if __name__=="__main__":
     for i,Zpos in enumerate(Zposs):
 
         input("Please zoom out VNA span to see resonator motion.")
-        Znow = pos.get_position()
-        Zincr = Zpos - Znow
-        pos.incremental_move(Zincr)
+        pos.absolute_move(Zpos)
         actualZ = pos.get_position()
         input("Please adjust view until only fundamental visible.")
         #automate.autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, plot=False)

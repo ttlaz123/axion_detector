@@ -1036,7 +1036,7 @@ def pos_z_scan(auto, Z_poss, plot=False, save=True):
     err, hexa_position = auto.hexa.get_position()
     freqs = auto.na.get_pna_freq()
 
-    responses = np.zero((Z_poss.size, freqs.size))
+    responses = np.zeros((Z_poss.size, freqs.size))
 
     for i,Z_pos in enumerate(Z_poss):
 

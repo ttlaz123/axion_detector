@@ -140,6 +140,14 @@ class Positioner:
         except XPSException:
             print('Movement too far or positioner not initialized')
             exit(-1)
+    
+    def absolute_move(self, position):
+
+        try:
+            self.newportxps.move_stage(stage=self.stage_name, value = position, relative=False)
+        except XPSException:
+            print('Movement too far or positioner not initialized')
+            exit(-1)
 
     def arrow_move(self, pressed_key, verbose=True, debug=False):
         '''
