@@ -368,7 +368,7 @@ class AutoScanner():
         self.absolute_move(abs_step)
 
 
-    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, navg=1):
+    def NMeval(self, positions, Z_pos, freqs, fit_win, delay=0.4, navg=1, do_filter=False):
         """
         Take in an absolute position.
         Get the resonant frequency from get_fundamental_freqs (but only one row)
@@ -383,6 +383,8 @@ class AutoScanner():
         for i in range(navg):
             response += self.na.get_pna_response()
         response /= navg
+        if do_filter:
+            response = analyse.auto_filter(freqs, response)
         try:
             results = analyse.get_fundamental_freqs(response.reshape(1,-1), freqs, fit_win=fit_win, plot=False)
             retval = -results[0][0] # minimize, after all!
@@ -698,7 +700,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, plot=False):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, do_filter=False, plot=False, save=True):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
@@ -709,13 +711,14 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     max_iters is sraightforward
     navg is number of VNA responses to take and average before fitting to lorentz
     fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
+    do_filter is whether or not to fft filter out the cable reflections (or attempt to)
     """
     
     _, start_pos = auto.hexa.get_position()
     freqs = auto.na.get_pna_freq()
     Z_pos = start_pos[2]
 
-    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg)
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg, do_filter=do_filter)
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
@@ -726,9 +729,9 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     # get the wedge in optimal position
     auto.fromarray_absolute_move([*res['x'][:2], Z_pos, *res['x'][2:]])
 
-    if plot == True:
+    if plot:
 
-        hist = np.array(res['allvecs']).T # (coord, niters)
+        history = np.array(res['allvecs']).T # (coord, niters)
         plt.figure()
         plt.title("Best Solution at each Iter")
         coords = ["X", "Y", "U", "V", "W"]
@@ -737,8 +740,13 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
                 ax1 = plt.subplot(511+i)
             else:
                 plt.subplot(511+i, sharex=ax1)
-            plt.plot(hist[i])
+            plt.plot(history[i])
             plt.ylabel(coords[i])
+    
+    if save:
+        fname = datetime.datetime.now().strftime("NM_histories\\%Y%m%d_%H%M%S_NM_history")
+        history = np.array(res['allvecs']).T # (coord, niters)
+        np.save(fname, history)
 
     return res['success']
 
@@ -1108,10 +1116,12 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
             plt.plot(freqs, np.angle(response))
         else:
             plt.plot(freqs,response, label=Zpos)
+        plt.legend()
     if save:
         data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
         now_str = datetime.datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
         fname = f"{data_dir}{now_str}_zoomed_{Zpos}Z"
+        print(f"Saving to {fname}")
         np.save(fname, np.vstack((freqs,response)))
 
     return freqs, response
@@ -1135,7 +1145,7 @@ def main():
         pos = None
     else:
         pos = Positioner(host=args.pos_ip, username='Administrator', password=args.pos_password)#, stage_name="IMS100V")
-    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)#,xps=pos.get_xps())
+    hexa = HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password,xps=pos.get_xps())
     na = na_tracer.NetworkAnalyzer()
 
     #webhook = Webhook.frhom_url("https://discordapp.com/api/webhooks/903012918126346270/wKyx27DEes1nibOCvu1tM6T5F4zkv60TNq-J0UkFDY-9WyZ2izDCZ_-VbpHvceeWsFqF", adapter=RequestsWebhookAdapter())
@@ -1168,11 +1178,13 @@ def main():
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
+    #read_spectrum(auto, plot=True)
+
     #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
     #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
-    autoalign_NM(auto, 1e-3, 1e5,  [0.05, 0.1, 0.1, 0.05, 0.05], max_iters=50, fit_win=200, plot=True)
-    plt.show()
+    #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, plot=True, do_filter=True)
+    #plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
 
@@ -1212,16 +1224,16 @@ def main():
     #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     #webhook.send('Autoalign complete.')
     
-    '''
+    
     # scan all
-    coords = np.array(['dX', 'dV', 'dW', 'dY','dU'])
-    starts = np.array([-0.2, -0.2, -0.2, -0.5, -0.2])
+    coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
+    starts = np.array([-0.1, -0.2, -0.1, -0.1, -0.1])
     ends = -1*starts
-    ns = np.array([10, 10, 10, 10, 10])
+    ns = np.array([200]*5)
     incrs = (ends - starts)/ns
     
     scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
-    '''
+    
 
     '''
     for i in range(5):
@@ -1240,7 +1252,7 @@ def main():
     scan_one(auto, coord, start, end, incr,plot=True, save=True)
     '''
 
-    #read_spectrum(auto, harmon=None, save=True, plot=True, complex=True)
+    #read_spectrum(auto, harmon=None, save=True, plot=True, complex=False)
 
     #wide_z_scan(auto, 0, 91.4 - 10.4, 20, 3, plot=True)
 

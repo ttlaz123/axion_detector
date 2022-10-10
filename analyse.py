@@ -55,7 +55,7 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     ffted = np.fft.rfft(response)
     ind = int(np.round((freq[-1]-freq[0])*a))
     ffted[ind-rng:ind+rng] = 0
-    filted = np.fft.irfft(ffted)
+    filted = np.fft.irfft(ffted, n=response.size)
 
     if plot:
         plt.figure()
@@ -185,7 +185,14 @@ def get_fundamental_freqs(responses, freqs, Q_guess=1e4, fit_win=100, plot=False
         skw = 0
 
         mintrans = bkg-responses[n].min()
-        min_ind = responses[n].argmin()
+        min_inds, _ = get_fundamental_inds(responses, freqs)
+        if len(min_inds) == 0:
+            print("Could not find a trough!")
+            results[n][0] = 0
+            results[n][1] = 0
+            continue
+        else:
+            min_ind = min_inds[0]
         res_f = freqs[min_ind]
 
         win_freq = freqs[max(min_ind - fit_win, 0) : min(min_ind + fit_win, len(responses[n]))]
@@ -334,8 +341,8 @@ def get_fundamental_inds(responses,  freqs, search_order='fwd', search_range=175
     fspan = freqs[-1] - freqs[0]
     print(fspan)
 
-    initial_prominence = 0
-    subsequent_prominence = 0
+    initial_prominence = 0.3
+    subsequent_prominence = 0.1
     max_width = 1000000 * fspan/350e6 * f_points/6401 # 6401 is the resolution this was tweaked at
     #wlen = 1000000 * fspan/350e6 * f_points/6401 # 350 MHz is the zoom this was tweaked at
     search_range = int(search_range * f_points/6401)
