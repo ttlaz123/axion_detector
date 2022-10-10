@@ -167,8 +167,9 @@ if __name__ == '__main__':
         N = responses.shape[0]
         incr = (end-start)/N
 
-        specs = analyse.fft_cable_ref_filter(responses, harmon=60, plot=False)
+        #specs = analyse.fft_cable_ref_filter(responses, harmon=60, plot=False)
         #specs = responses - cal_data
+        specs = responses
 
         coord_num = np.where(coord == np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW']))[0]
         
@@ -190,7 +191,7 @@ if __name__ == '__main__':
         '''
 
         plt.figure(figsize=(12,8))
-        #plot_tuning(specs, freqs, start_pos, coord, start, end)
+        plot_tuning(specs, freqs, start_pos, coord, start, end)
 
         '''
         plt.figure()

@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 
-FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220914_122911.csv'
+FILENAME = 'C:/Users/FTS/source/repos/axion_detector/field_mapping_data/20220831_132445.csv'
 
 def read_deltas(file, return_fres=False):
     with open(file) as f:
@@ -46,7 +46,9 @@ def plot_deltas(deltas):
     #plt.savefig(f'field_mapping_plots\\rear_{filename}.png')
     plt.show()
 
-def plot_Es(deltas, mirror_rear=False):
+def plot_Es(deltas, mirror_rear=False, readjust_for_negatives=False):
+    if readjust_for_negatives and np.max(deltas) > 0:
+        deltas -= np.max(deltas)
     Es = np.sqrt(-1*deltas)
     plt.figure()
     plt.title("Front Map")
@@ -74,7 +76,8 @@ def plot_hists(deltas):
 
 def main():
     deltas = read_deltas(FILENAME)
-    plot_Es(deltas, mirror_rear=False)
+    #plot_deltas(deltas)
+    plot_Es(deltas, mirror_rear=True)
     plt.show()
 
 if __name__ == '__main__':

@@ -55,7 +55,7 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     ffted = np.fft.rfft(response)
     ind = int(np.round((freq[-1]-freq[0])*a))
     ffted[ind-rng:ind+rng] = 0
-    filted = np.fft.irfft(ffted)
+    filted = np.fft.irfft(ffted, n=response.size)
 
     if plot:
         plt.figure()
