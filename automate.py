@@ -3,6 +3,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import threading
+import json
 
 from scipy.signal import find_peaks
 from scipy.optimize import minimize
@@ -745,6 +746,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     
     if save:
         fname = datetime.datetime.now().strftime("NM_histories\\%Y%m%d_%H%M%S_NM_history")
+        
         history = np.array(res['allvecs']).T # (coord, niters)
         np.save(fname, history)
 
@@ -1018,6 +1020,49 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 
     # save, plot, etc.
 
+def pos_z_scan(auto, Z_poss, plot=False, save=True):
+    """
+    auto: Automate instance
+    Z_poss: array or positioner Z positions
+    plot/save: whether to do so
+
+    Makes a tuning map, scanning over given Z_poss (like a mode map but it's Z).
+    Uses the positioner for motion, but needs hexa too for metadata.
+
+    Saves a data file (the 2D S11 map) and a json metadata file with
+    the actual Z positions, freqs, and hexa position.
+    """
+
+    err, hexa_position = auto.hexa.get_position()
+    freqs = auto.na.get_pna_freq()
+
+    responses = np.zeros((Z_poss.size, freqs.size))
+
+    for i,Z_pos in enumerate(Z_poss):
+
+        auto.pos.absolute_move(Z_pos)
+
+        responses[i] = auto.na.get_pna_response()
+
+    if plot:
+        plot_tuning(responses, freqs, hexa_position, 'Z', Z_poss[0], Z_poss[-1])
+
+    if save:
+        fname = datetime.datetime.now().strftime("tuning_data\\%Y%m%d_%H%M%S_Z_scan")
+
+        np.save(fname, responses)
+        
+        coord_names = ['X', 'Y', 'Z', 'U', 'V', 'W']
+        metadata = dict(zip(coord_names, hexa_position))
+        metadata['Z_poss'] = Z_poss
+        metadata['freqs'] = freqs
+
+        with open(f"{fname}.json", "w") as write_file:
+            json.dump(metadata, write_file)
+
+
+
+
 def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=200, save_path=None):
     """
     Give an automate class instance to work with,
@@ -1178,6 +1223,9 @@ def main():
     for i in range(6):
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
+    Z_poss = np.linspace(90, 30, 200)
+    pos_z_scan(auto, Z_poss, plot=True, save=True)
+
     #read_spectrum(auto, plot=True)
 
     #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
@@ -1232,7 +1280,7 @@ def main():
     ns = np.array([200]*5)
     incrs = (ends - starts)/ns
     
-    scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
+    #scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
     
 
     '''
