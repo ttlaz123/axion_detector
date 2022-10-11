@@ -32,6 +32,11 @@ def get_improvement_steps(history):
     real_steps = np.where(np.sum(deltas**2, axis=0) != 0)[0] + 1 # +1 to get the position that resulted from the change, i.e. the better position
     real_steps = np.hstack((0,real_steps)) # want to know the original position too
     progress_hist = history[:,real_steps]
+
+    # presumably the align succeeded, so the last position is the aligned position
+    # choose that to be zero.
+
+    progress_hist = (progress_hist.T - progress_hist[:,-1]).T
     
     return progress_hist
 
@@ -44,6 +49,9 @@ fpath = f"{datadir}/{fname}"
 
 history = np.load(fpath) # (coord, nstep)
 
-get_improvement_steps(history)
+print(get_improvement_steps(history))
+
+plot_NM_history(history)
 plt.show()
+
 
