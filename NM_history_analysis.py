@@ -10,6 +10,7 @@ def plot_NM_history(history):
             ax1 = plt.subplot(511+i)
         else:
             plt.subplot(511+i, sharex=ax1)
+            plt.subplots_adjust(hspace=0)
         if i != 4:
             plt.tick_params(axis='x',which='both',bottom=False,top=False,labelbottom=False)
         else:
@@ -21,8 +22,7 @@ def plot_NM_history(history):
         else: # angular
             plt.plot((history[i] - history[i][-1])*3600, 'k')
             plt.ylabel(f"{coords[i]} (arcsec)")
-    
-    plt.tight_layout()
+
 
 def get_improvement_steps(history):
 
