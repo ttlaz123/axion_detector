@@ -1,6 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+import json
+from scipy.signal import find_peaks
+from scipy.optimize import curve_fit
+
+import analyse as ana
 
 # where all the data lives (changes with machine)
 # all S11 data, be that mode maps or single spectra
@@ -229,10 +234,72 @@ def load_mode_map(fname):
 
     return freqs, responses, start_pos, coord, start, end
 
+def load_Z_scan(fname):
+    """
+    Load a Z scan made with automate.pos_z_scan. Different from the other mode maps since
+    it needs to talk to the positioner.
+
+    returns:
+    freqs, responses, start_pos, Z_poss
+
+     - freqs: (freq_npts) The VNA frequency bins
+     - responses: (N, freq_npts) (N here is # of Z positions visited) S11 at each Z position
+     - start_pos: (6) starting hexapod position. Usual (X, Y, Z, U, V, W). Shouldn't change.
+     - Z_poss: (N) full list of Z positions. Should be 1-1 with rows in responses.
+    """
+
+    fullname = f"{dir_tuning_data}/{fname}"
+
+    responses = np.load(f"{fullname}.npy")
+
+    with open(f"{fullname}.json") as f:
+        metadata = json.load(f)
+
+    coord_names = ['X', 'Y', 'Z', 'U', 'V', 'W']
+    start_pos = [metadata[coord] for coord in coord_names]
+
+    return metadata['freqs'], responses, start_pos, metadata['Z_poss']
+
+def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
+
+    Zfreqs, Zspecs, Zstart_pos, Z_map_poss = load_Z_scan(Zscan_fname)
+
+    # fit S11s
+    fit_wins = np.array([700]*3+[400]+[500]+[200])
+    results = np.zeros((len(S11_fit_fnames), 5)) # (file, param [Z, fres, dfres, Q, dQ])
+    
+    for i, fname in enumerate(S11_fit_fnames):
+    
+        Z, freqs, spec = load_spec(fname, return_Z=True)
+    
+        peaks, properties = find_peaks(-spec, prominence=0.5)
+        win = slice(peaks[0]-fit_wins[i],peaks[0]+fit_wins[i])
+        wspec = spec[win]
+        wfreqs = freqs[win]
+    
+        popt, pcov = ana.get_lorentz_fit(wfreqs, wspec, get_cov=True)
+
+        if show_fits:
+            plt.figure()
+            plt.subplot(211)
+            plt.plot(freqs, spec, 'k.')
+            plt.plot(wfreqs, ana.skewed_lorentzian(wfreqs, *popt), 'r--')
+            plt.subplot(212)
+            plt.plot(wfreqs, wspec-ana.skewed_lorentzian(wfreqs, *popt), 'k.')
+            plt.show()
+    
+        results[i] = [Z, popt[4], np.sqrt(pcov[4][4]), popt[5], np.sqrt(pcov[5][5])]
+
+
+    plt.figure()
+    ext = [Zfreqs[0], Zfreqs[-1], Z_map_poss[-1], Z_map_poss[0]]
+    plt.imshow(Zspecs, extent=ext, interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.plot(results[:,1], results[:,0], 'r.')
 
 if __name__=="__main__":
-    Z, _, _ = load_spec("2022-10-06-14-25-41_zoomed_70Z.npy", return_Z=True)
-    print(Z)
-    
 
+    S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
+    Zscan_fname = "20221010_172745_Z_scan/20221010_172745_Z_scan"
 
+    plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
+    plt.show()
