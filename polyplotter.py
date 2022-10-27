@@ -260,6 +260,26 @@ def load_Z_scan(fname):
 
     return metadata['freqs'], responses, start_pos, metadata['Z_poss']
 
+def calculate_form_factor(cdat, C_correction_factor=1.483):
+    """
+    Get form factor at each frequency from comsol intergration data.
+
+    inputs:
+     - cdat: comsol integration data dict (loaded using load_comsol_data)
+     - C_correction_factor: multiply calculated C by this number before returning. Default val comes from the reduction in volume when the absobing zones are removed.
+    
+    returns:
+    Cs
+
+     - Cs: Form factor at that frequency
+    """
+    
+    Cs = np.abs(cdat['ez'])**2 / (cdat['e2'] * cdat['v']) * C_correction_factor
+
+    return Cs
+    
+
+
 def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
 
     Zfreqs, Zspecs, Zstart_pos, Z_map_poss = load_Z_scan(Zscan_fname)
@@ -301,12 +321,29 @@ def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
 
 def plot_all_Cvsf():
 
-    C_correction_factor = 1.483
+    sim_coords = ['x', 'y', 'v', 'u', 'w']
+    hexa_coords = ['X', 'Y', 'U', 'V', 'W']
+    distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
+    suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
+    units = ["um", "um", "arcmin", "arcmin", "arcmin"]
 
-    all_fnames = np.zeros((5,6)) # (# of coords, maximum number of steps)
+    # construct an array of C's for each DoF (varied lengths so can't 2d-ize)
 
-    for i in range(all_fnames.shape[0]):
-        pass
+    all_Cvsf = {}
+
+    for i in range(len(hexa_coords)):
+        fnames = [f'aligned_form_factor{suffixes[i]}.txt'] + [f'd{sim_coords[i]}{distance_arrays[i][j]}{units[i]}_form_factor{suffixes[i]}.txt' for j in range(len(distance_arrays[i]))]
+
+        max_Cs = np.zeros(len(fnames))
+
+        for j, fname in enumerate(fnames):
+            cdat = load_comsol_integrations(fname)
+            Cs = calculate_form_factor(cdat)
+            max_Cs[j] = np.max(Cs)
+
+        all_Cvsf[hexa_coords[i]] = max_Cs
+
+        plt.plot([0]+distance_arrays[i],max_Cs)
 
 def plot_NM_history(history):
 
@@ -345,5 +382,6 @@ if __name__=="__main__":
     NM_history_fname = "20221011_102950_NM_history.npy"
 
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
-    plot_NM_history(load_NM_history(NM_history_fname))
+    #plot_NM_history(load_NM_history(NM_history_fname))
+    plot_all_Cvsf()
     plt.show()
