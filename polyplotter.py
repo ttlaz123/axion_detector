@@ -11,7 +11,7 @@ import analyse as ana
 # all S11 data, be that mode maps or single spectra
 dir_tuning_data = "/home/tdyson/coding/axion_detector/tuning_data/"
 # NM algortihm's best parameter choice at each step
-dir_NM_histories = "/home/tdyson/coding/axion_detector/MN_histories/"
+dir_NM_histories = "/home/tdyson/coding/axion_detector/NM_histories/"
 # 2d field maps taken with the disk techinque
 dir_field_maps = "/home/tdyson/coding/axion_detector/field_mapping_data/"
 # form factor according to COMSOL integrations
@@ -296,10 +296,54 @@ def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
     plt.imshow(Zspecs, extent=ext, interpolation='none', aspect='auto', cmap='plasma_r')
     plt.plot(results[:,1], results[:,0], 'r.')
 
+    print(results[:,0])
+    print(results[0,1]*1e-9,results[-1,1]*1e-9)
+
+def plot_all_Cvsf():
+
+    C_correction_factor = 1.483
+
+    all_fnames = np.zeros((5,6)) # (# of coords, maximum number of steps)
+
+    for i in range(all_fnames.shape[0]):
+        pass
+
+def plot_NM_history(history):
+
+    ticksize = 20
+    labelsize = 30
+    
+    plt.figure(figsize=(10,20))
+    coords = ["X", "Y", "U", "V", "W"]
+    for i in range(5):
+        if i == 0:
+            ax1 = plt.subplot(511+i)
+            plt.title("Best Position at each NM Step", fontsize=40)
+        else:
+            plt.subplot(511+i, sharex=ax1)
+            plt.subplots_adjust(hspace=0)
+        if i != 4:
+            plt.tick_params(axis='x',which='both',bottom=False,top=False,labelbottom=False)
+        else:
+            plt.xlabel("Nelder-Mead Iteration Number", fontsize=labelsize)
+            plt.xticks(fontsize=ticksize)
+
+        plt.yticks(fontsize=ticksize)
+        if coords[i] == "X" or coords[i] == "Y": # linear units
+            plt.plot(history[i] - history[i][-1], 'k')
+            plt.ylabel(f"{coords[i]} (mm)", fontsize=labelsize)
+        else: # angular
+            plt.plot((history[i] - history[i][-1])*3600, 'k')
+            plt.ylabel(f"{coords[i]} (arcsec)", fontsize=labelsize)
+        
+
 if __name__=="__main__":
 
     S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
     Zscan_fname = "20221010_172745_Z_scan/20221010_172745_Z_scan"
 
-    plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
+    NM_history_fname = "20221011_102950_NM_history.npy"
+
+    #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
+    plot_NM_history(load_NM_history(NM_history_fname))
     plt.show()
