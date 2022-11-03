@@ -16,13 +16,15 @@ dir_NM_histories = "/home/tdyson/coding/axion_detector/NM_histories/"
 dir_field_maps = "/home/tdyson/coding/axion_detector/field_mapping_data/"
 # form factor according to COMSOL integrations
 dir_comsol_ints = "/home/tdyson/coding/axion_detector/form_factor_data/"
+# simulated S11 data from which to extract predicted Q
+dir_comsol_s11 = "/home/tdyson/coding/axion_detector/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
 dir_align_hists = "/home/tdyson/coding/axion_detector/autoalign_hist_data/"
 
 def load_align_hists(fname, keep_fails=False):
     """
     load autoalign histogram data.
-    options: 
+    parameters: 
      - keep_fails: whether to delete runs where the align failed to converge
        (if true, the fres of the run will be -1 for autoalign failure (probably max iters
        reached) and -2 if it couldn't fit a lorentzian to the aligned spectrum).
@@ -92,10 +94,10 @@ def load_field_map(fname, return_fres=False):
        an option in the plotting function to do that if you like (to e.g. compare with maps
        in COMSOL where you have to look from the back).
     """
-    with open(f"{dir_field_maps}/{fname}") as f:
+    with open(f"{dir_field_maps}/{fname}.csv") as f:
         vals = f.readlines()
         #this works provided the measurements were taken in a square:
-        dim = int(math.sqrt((len(vals) - 1) // 2 ))
+        dim = int(np.sqrt((len(vals) - 1) // 2 ))
         deltas = np.zeros((2, dim, dim))
         counter = 0
         for i in range(2):
@@ -157,6 +159,25 @@ def load_comsol_integrations(fname, colnames=['freq', 'ez', 'e2', 'v']):
             results[name] = np.real(cdat[:,i].T)
     
     return results
+
+def load_comsol_s11(fname):
+    """
+    Loads S11 sweeps simulated by COMSOL
+
+    returns:
+    freqs, spec
+
+     - freqs: frequencies at which S11 was simulated
+     - spec: S11 response predicted by COMSOL
+    """
+
+    fullname = f"{dir_comsol_s11}/{fname}"
+    
+    header = 8  # N of lines to skip at the header
+        
+    dat = np.genfromtxt(fullname, skip_header=header)
+
+    return dat[:,0], dat[:,1]
 
 def load_NM_history(fname):
     """
@@ -327,9 +348,47 @@ def plot_all_Cvsf():
     suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
     units = ["um", "um", "arcmin", "arcmin", "arcmin"]
 
-    # construct an array of C's for each DoF (varied lengths so can't 2d-ize)
+    linestyles = ['b--', 'g--', 'g', 'b', 'r']
 
-    all_Cvsf = {}
+    plt.xlabel("Fundamental Frequency (GHz)")
+    plt.ylabel("Form Factor")
+
+    for i in range(len(hexa_coords)):
+        fnames = [f'aligned_form_factor{suffixes[i]}.txt'] + [f'd{sim_coords[i]}{distance_arrays[i][j]}{units[i]}_form_factor{suffixes[i]}.txt' for j in range(len(distance_arrays[i]))]
+
+        max_Cs = np.zeros(len(fnames))
+        max_C_fs = np.zeros(len(fnames))
+
+        for j, fname in enumerate(fnames):
+            cdat = load_comsol_integrations(fname)
+            Cs = calculate_form_factor(cdat)
+            max_Cs[j] = np.max(Cs)
+            max_C_fs[j] = cdat['freq'][np.where(Cs == max(Cs))]
+
+        if hexa_coords[i]=="Y" or hexa_coords[i] == "U":
+            plt.plot(max_C_fs,max_Cs, linestyles[i], label=hexa_coords[i])
+
+    plt.legend()
+    plt.grid()
+    
+def plot_all_CvsX():
+
+    sim_coords = ['x', 'y', 'v', 'u', 'w']
+    hexa_coords = ['X', 'Y', 'U', 'V', 'W']
+    distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
+    suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
+    units = ["um", "um", "arcmin", "arcmin", "arcmin"]
+
+    linestyles = ['b--', 'g--', 'g', 'b', 'r']
+
+    f, ax1 = plt.subplots()
+    ax2 = ax1.twiny()
+
+    ax1.set_xlabel("Position ($\mu$m)")
+    ax2.set_xlabel("Position (arcsec)")
+    ax1.set_ylabel("Form Factor")
+
+    lines = []
 
     for i in range(len(hexa_coords)):
         fnames = [f'aligned_form_factor{suffixes[i]}.txt'] + [f'd{sim_coords[i]}{distance_arrays[i][j]}{units[i]}_form_factor{suffixes[i]}.txt' for j in range(len(distance_arrays[i]))]
@@ -341,9 +400,32 @@ def plot_all_Cvsf():
             Cs = calculate_form_factor(cdat)
             max_Cs[j] = np.max(Cs)
 
-        all_Cvsf[hexa_coords[i]] = max_Cs
+        if i < 2:
+            plot_ax = ax1
+        else:
+            plot_ax = ax2
+        lines += plot_ax.plot([0]+distance_arrays[i],max_Cs, linestyles[i], label=hexa_coords[i])
 
-        plt.plot([0]+distance_arrays[i],max_Cs)
+    ax1.legend(lines, [l.get_label() for l in lines])
+    ax1.grid()
+
+def plot_s11(freqs, spec, fit=False, start=0, stop=-1):
+
+    freqs = freqs[start:stop]
+    spec = spec[start:stop]
+    
+    if fit:
+        popt, pcov = ana.get_lorentz_fit(freqs, spec, get_cov=True)
+        smooth_f = np.linspace(min(freqs), max(freqs), 1000)
+        plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
+        print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
+        print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
+
+    plt.plot(freqs, spec, 'k.')
+    
+    if fit:
+        plt.legend()
+    
 
 def plot_NM_history(history):
 
@@ -360,7 +442,7 @@ def plot_NM_history(history):
             plt.subplot(511+i, sharex=ax1)
             plt.subplots_adjust(hspace=0)
         if i != 4:
-            plt.tick_params(axis='x',which='both',bottom=False,top=False,labelbottom=False)
+            plt.tick_params(anxis='x',which='both',bottom=False,top=False,labelbottom=False)
         else:
             plt.xlabel("Nelder-Mead Iteration Number", fontsize=labelsize)
             plt.xticks(fontsize=ticksize)
@@ -372,6 +454,36 @@ def plot_NM_history(history):
         else: # angular
             plt.plot((history[i] - history[i][-1])*3600, 'k')
             plt.ylabel(f"{coords[i]} (arcsec)", fontsize=labelsize)
+
+def plot_field_map(deltas, plot_E=True, mirror_rear=True, readjust_for_negatives=False):
+    """
+    plots field mapping data obtained from the disk perturbation technique
+    & loaded by load_field_map
+
+    parameters:
+     - show_E: plot E = -sqrt(deltas) instead of raw deltas
+     - mirror_rear: flip the rear map along the Y=0 axis (as if you were looking at it from behind, rather than looking through the front half from the front). Useful for comparing to COMSOL screenshots.
+     - readjust_for_negatives: if plot_E == True, negative deltas will result in nans. In principle this shouldn't happen, but sometimes the disk was in a spot with more field than elsewhere for the fiduical measurement. This adds a constant to all deltas to make the smallest one (in magnitude) zero. ONLY APPLIES if plot_E == True.
+    """
+
+    if plot_E:
+        if readjust_for_negatives and np.max(deltas) > 0:
+            deltas -= np.max(deltas)
+        maps = np.sqrt(-1*deltas)
+    else:
+        maps = deltas
+
+    if mirror_rear:
+        maps[1] = np.flip(maps[1], axis=1)
+
+    titles = ["Field Map Using Resonance Perturbation $--$ Front",
+              "Field Map Using Resonance Perturbation $--$ Rear"]
+    
+    for i in range(2):
+        plt.figure()
+        plt.title(titles[i])
+        plt.imshow(maps[i], aspect='auto', interpolation='none', cmap='Spectral_r')
+        plt.colorbar(label='$\\lvert\\textbf{E}(\\textbf{x})\\rvert$ (Arbitrary Units)$')    
         
 
 if __name__=="__main__":
@@ -383,5 +495,8 @@ if __name__=="__main__":
 
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
     #plot_NM_history(load_NM_history(NM_history_fname))
-    plot_all_Cvsf()
+    #plot_all_Cvsf()
+    #plot_field_map(load_field_map('20220831_132445'))
+
+    plot_s11(*load_comsol_s11('20221103_Al_70z_S11_hires.txt'), fit=False)
     plt.show()
