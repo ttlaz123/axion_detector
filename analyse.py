@@ -12,8 +12,6 @@ import argparse
 
 def fft_cable_ref_filter(responses, harmon=9, plot=False):
 
-    print(responses)
-
     if len(responses.shape) == 1:
         resp_fft = np.fft.rfft(responses)
     else:
@@ -52,7 +50,8 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
     rng: number of indices to set to zero on each side of the target
     """
 
-    ffted = np.fft.rfft(response)
+    ffted = np.fft.rfft(response) # gets cut and re-transformed
+    intact_ffted = np.fft.rfft(response) # not changed. For plotting
     ind = int(np.round((freq[-1]-freq[0])*a))
     ffted[ind-rng:ind+rng] = 0
     filted = np.fft.irfft(ffted, n=response.size)
@@ -63,7 +62,8 @@ def auto_filter(freq, response, a=3e-8, rng=1, plot=False, return_harmon=False):
 
         plt.plot(filted)
         plt.figure()
-        plt.plot(np.abs(ffted))
+        plt.plot(np.log10(np.abs(intact_ffted)))
+        plt.ylabel("FFT (dB)")
 
     if return_harmon:
         retval = (filted, ind)
@@ -126,8 +126,6 @@ def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
     denom = (1+4*Q**2*((x-res_f)/res_f)**2)
     term3 = numer/denom
     return term1 + term2 - term3
-
-
 
 def get_lorentz_fit(freqs, spec, get_cov=False):
 
