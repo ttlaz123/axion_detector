@@ -5,6 +5,8 @@ import json
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
 
+from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
+
 import analyse as ana
 
 # where all the data lives (changes with machine)
@@ -340,18 +342,42 @@ def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
     print(results[:,0])
     print(results[0,1]*1e-9,results[-1,1]*1e-9)
 
-def plot_all_Cvsf():
+def plot_all_Cvsf(all_eigen=True):
+    """
+    plot the form factor as a function of fundamental frequency as we perturb each misalignment coord.
+    
+    if all_eigen, use the eigen simulations for all of the form factors. More consistent results, but a bit fewer files (so less positional resolution).
+    """
 
     sim_coords = ['x', 'y', 'v', 'u', 'w']
     hexa_coords = ['X', 'Y', 'U', 'V', 'W']
-    distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
-    suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
+    if all_eigen:
+        distance_arrays = [[5, 10, 30], [30, 60], [6, 12], [3, 6, 9], [3, 6, 9, 12]]
+        suffixes = ["_eigen"]*5
+    else:
+        distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
+        suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
     units = ["um", "um", "arcmin", "arcmin", "arcmin"]
 
     linestyles = ['b--', 'g--', 'g', 'b', 'r']
 
-    plt.xlabel("Fundamental Frequency (GHz)")
-    plt.ylabel("Form Factor")
+    fontsize = 50
+    legendsize = 40
+    insetticksize = 35
+
+    f, ax1 = plt.subplots(figsize=(17,15))
+
+    ax2 = plt.axes([0,0,1,1])
+    ip = InsetPosition(ax1, [0.11, 0.51, 0.4, 0.4]) # left edge, bot. edge, w, h
+    ax2.set_axes_locator(ip)
+
+    mark_inset(ax1, ax2, loc1=2, loc2=4, fc="none", ec='0.5')
+
+    ax1.set_xlabel("$\omega_{010}$ GHz$^{-1}$", fontsize=fontsize)
+    ax1.set_ylabel("$C$", fontsize=fontsize)
+
+    ax1.tick_params(axis='both', which='major', labelsize=fontsize)
+    ax2.tick_params(axis='both', which='major', labelsize=insetticksize)
 
     for i in range(len(hexa_coords)):
         fnames = [f'aligned_form_factor{suffixes[i]}.txt'] + [f'd{sim_coords[i]}{distance_arrays[i][j]}{units[i]}_form_factor{suffixes[i]}.txt' for j in range(len(distance_arrays[i]))]
@@ -365,28 +391,50 @@ def plot_all_Cvsf():
             max_Cs[j] = np.max(Cs)
             max_C_fs[j] = cdat['freq'][np.where(Cs == max(Cs))]
 
-        if hexa_coords[i]=="Y" or hexa_coords[i] == "U":
-            plt.plot(max_C_fs,max_Cs, linestyles[i], label=hexa_coords[i])
+        ax1.plot(max_C_fs,max_Cs, linestyles[i], label=hexa_coords[i], linewidth=5)
+        ax2.plot(max_C_fs,max_Cs, linestyles[i], label=hexa_coords[i], linewidth=5)
 
-    plt.legend()
-    plt.grid()
+        pady = 1e-3
+        padx = 0.3e-3
+        if hexa_coords[i] == "U":
+            ax2.set_ylim(min(max_Cs)-pady, max(max_Cs)+pady)
+            ax2.set_xlim(min(max_C_fs)-padx, max(max_C_fs)+padx)
+        
+    ax1.legend(loc='lower right', fontsize=legendsize)
+    ax1.grid()
+    ax2.grid()
     
-def plot_all_CvsX():
+def plot_all_CvsX(all_eigen=True):
+    """
+    plot the form factor as a function of each of the alignment parameters.
+    
+    if all_eigen, use the eigen simulations for all of the form factors. More consistent results, but a bit fewer files (so less positional resolution).
+    """
 
     sim_coords = ['x', 'y', 'v', 'u', 'w']
     hexa_coords = ['X', 'Y', 'U', 'V', 'W']
-    distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
-    suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
+    if all_eigen:
+        distance_arrays = [[5, 10, 30], [30, 60], [6, 12], [3, 6, 9], [3, 6, 9, 12]]
+        suffixes = ["_eigen"]*5
+    else:
+        distance_arrays = [[5, 10, 15, 20, 30], [30, 60], [6, 12], [1.5, 3, 4.5, 6, 7.5, 9], [1.5, 3, 4.5, 6, 7.5, 9]]
+        suffixes = ["_wf","_eigen", "_eigen", "_wf", "_wf"]
     units = ["um", "um", "arcmin", "arcmin", "arcmin"]
 
     linestyles = ['b--', 'g--', 'g', 'b', 'r']
 
-    f, ax1 = plt.subplots()
+    f, ax1 = plt.subplots(figsize=(17,15))
     ax2 = ax1.twiny()
 
-    ax1.set_xlabel("Position ($\mu$m)")
-    ax2.set_xlabel("Position (arcsec)")
-    ax1.set_ylabel("Form Factor")
+    fontsize = 50
+    legendsize = 40
+    
+    ax1.set_xlabel("Position ($\mu$m)", fontsize=fontsize)
+    ax2.set_xlabel("Position (arcsec)", fontsize=fontsize)
+    ax1.set_ylabel("$C$", fontsize=fontsize)
+    
+    ax1.tick_params(axis='both', which='major', labelsize=fontsize)
+    ax2.tick_params(axis='both', which='major', labelsize=fontsize)
 
     lines = []
 
@@ -404,24 +452,24 @@ def plot_all_CvsX():
             plot_ax = ax1
         else:
             plot_ax = ax2
-        lines += plot_ax.plot([0]+distance_arrays[i],max_Cs, linestyles[i], label=hexa_coords[i])
+        lines += plot_ax.plot([0]+distance_arrays[i],max_Cs, linestyles[i], linewidth=5, label=hexa_coords[i])
 
-    ax1.legend(lines, [l.get_label() for l in lines])
+    ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize)
     ax1.grid()
 
 def plot_s11(freqs, spec, fit=False, start=0, stop=-1):
 
-    freqs = freqs[start:stop]
-    spec = spec[start:stop]
-    
-    if fit:
-        popt, pcov = ana.get_lorentz_fit(freqs, spec, get_cov=True)
-        smooth_f = np.linspace(min(freqs), max(freqs), 1000)
-        plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
-        print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
-        print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
+    winfreqs = freqs[start:stop]
+    winspec = spec[start:stop]
 
     plt.plot(freqs, spec, 'k.')
+    
+    if fit:
+        popt, pcov = ana.get_lorentz_fit(winfreqs, winspec, get_cov=True)
+        smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
+        plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
+        print(f'fres * Hz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
+        print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
     
     if fit:
         plt.legend()
@@ -437,7 +485,7 @@ def plot_NM_history(history):
     for i in range(5):
         if i == 0:
             ax1 = plt.subplot(511+i)
-            plt.title("Best Position at each NM Step", fontsize=40)
+            plt.title("Best Position at eapppch NM Step", fontsize=40)
         else:
             plt.subplot(511+i, sharex=ax1)
             plt.subplots_adjust(hspace=0)
@@ -495,8 +543,10 @@ if __name__=="__main__":
 
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
     #plot_NM_history(load_NM_history(NM_history_fname))
+    #plot_all_CvsX()
     #plot_all_Cvsf()
     #plot_field_map(load_field_map('20220831_132445'))
 
-    plot_s11(*load_comsol_s11('20221103_Al_70z_S11_hires.txt'), fit=False)
+    #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
+    plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
     plt.show()
