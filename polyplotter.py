@@ -531,8 +531,77 @@ def plot_field_map(deltas, plot_E=True, mirror_rear=True, readjust_for_negatives
         plt.figure()
         plt.title(titles[i])
         plt.imshow(maps[i], aspect='auto', interpolation='none', cmap='Spectral_r')
-        plt.colorbar(label='$\\lvert\\textbf{E}(\\textbf{x})\\rvert$ (Arbitrary Units)$')    
+        plt.colorbar(label='$\\lvert\\textbf{E}(\\textbf{x})\\rvert$ (Arbitrary Units)$')
+
+def plot_mode_map(responses,freqs, start_pos, coord, start, end):
+    """
+    Makes a plot from what load_mode_map gives you.
+    """
+
+    coords = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
+    init_param = start_pos[np.where(coords==coord)][0]
+
+    freqs = freqs/10**9 # GHz
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], (end+init_param)*1e3, (start+init_param)*1e3], interpolation='none', aspect='auto', cmap='plasma_r')
+    #plt.imshow(responses, interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.title(f"Mode Map for {coord[-1]}", fontsize=30, y=1.01)
+    plt.xlabel('Frequency (GHz)', fontsize=20)
+    plt.ylabel(f'{coord[-1]} Position (um)', fontsize=20)
+    plt.xticks(fontsize=20)
+    plt.yticks(fontsize=20)
+    cb = plt.colorbar()
+    cb.set_label("S11 (dB)", fontsize=20)
+    cb.ax.tick_params(labelsize=20)
+
+def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False, fmt='gx', excluding_aligned=False, fshift=0):
+    """
+    Plot misalignment position of the wedge vs. fres's found by fitting to the s11 in sim_fnames.
+    Call this after plot_mode_map to overplot them seamlessly!
+
+    params:
+     - map_fname: name of mode map data file. The kind with the big long ugly name with all the positions in the filename
+     - sim_fnames: list of names of simulated s11's. The first fname should be the aligned position. Should have {number}d{coord} in the other filenames to let this know the position of the wedge.
+     - wins (sim_fnames.size, 2): A list of start and stop windows for the fitting. By default the full span is used.
+     - show_fits: Whether to plot the fits. Good for checking the fits. Must be False to overplot well with plot_mode_map of course.
+     - fmt: format of data points in the final plot (as you would pass to plt.errorbar)
+     - excluding_aligned: Whether the first file is the aligned position file or not. If True, the function will look for a position in the filename of even the first file.
+     - fshift: amount to add to the frequency of each point in the final plot. Corrects for construction error when overplotting with plot_mode_map
+    """
+
+    print("[0-9]*{coord.lower()}")
+
+    fress = np.zeros(len(sim_fnames))
+    freserrs = np.zeros(len(sim_fnames))
+    positions = np.zeros(len(sim_fnames))
+    for i, fname in enumerate(sim_fnames):
+        print(f"Working on {fname}...")
+        if i == 0 and not excluding_aligned:
+            positions[i] = 0
+        else:
+            pos_string = re.search(f"d[xyuvw]\\d+", fname)
+            positions[i] = float(pos_string.group()[2:])
         
+        wide_simfreqs, wide_spec = load_comsol_s11(fname)
+        simfreqs = wide_simfreqs[wins[i,0]:wins[i,1]]
+        spec = wide_spec[wins[i,0]:wins[i,1]]
+        
+        popt, pcov = ana.get_lorentz_fit(simfreqs, spec, get_cov=True)
+
+        fress[i] = popt[-2]
+        freserrs[i] = np.sqrt(pcov[-2][-2])
+
+        if show_fits:
+            xs = np.arange(wide_simfreqs.size)
+            win_xs = xs[wins[i,0]:wins[i,1]]
+            smooth_xs = np.linspace(min(win_xs), max(win_xs), 1000)
+            smooth_fs = np.linspace(min(simfreqs), max(simfreqs), 1000)
+            
+            plt.figure()
+            plt.plot(xs, wide_spec, 'k.')
+            plt.plot(smooth_xs, ana.skewed_lorentzian(smooth_fs, *popt), 'r--', label="fit")
+            plt.show() # ensure you're fitting well
+    
+    plt.errorbar(fress+fshift, positions, xerr=freserrs, fmt=fmt, capsize=8, markersize=15)
 
 if __name__=="__main__":
 
@@ -541,6 +610,9 @@ if __name__=="__main__":
 
     NM_history_fname = "20221011_102950_NM_history.npy"
 
+    map_fname = "2022-10-13-18-25-14_3.291211567346X-0.5641939352805Y10.00045313989Z-0.09095016416645U0.5974875796197V0.9704551575534W-0.05i0.05fdX.npy"
+    sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
+
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
     #plot_NM_history(load_NM_history(NM_history_fname))
     #plot_all_CvsX()
@@ -548,5 +620,38 @@ if __name__=="__main__":
     #plot_field_map(load_field_map('20220831_132445'))
 
     #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
-    plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
+    #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
+
+    freqs, responses, start_pos, coord, start, end = load_mode_map(map_fname)
+
+    _, harmon = ana.auto_filter(freqs, responses[0], return_harmon=True)
+
+    filted_resp = ana.fft_cable_ref_filter(responses, harmon=harmon)
+
+    middle_spec = filted_resp[len(responses)//2+1]
+    mode_map_aligned_win = slice(1000,1070)
+    popt = ana.get_lorentz_fit(freqs[mode_map_aligned_win], middle_spec[mode_map_aligned_win])
+    fres = popt[-2]*1e-9
+
+    plt.plot(freqs, middle_spec, 'k.')
+    smoothf = np.linspace(min(freqs[mode_map_aligned_win]), max(freqs[mode_map_aligned_win]), 1000)
+    plt.plot(smoothf, ana.skewed_lorentzian(smoothf, *popt), 'r--')
+
     plt.show()
+    
+    plt.plot(fres, 0, 'o')
+    
+    start_pos = np.array([0]*6) # map taken when aligned, so centering coords there
+    plot_mode_map(filted_resp, freqs, start_pos, coord, start, end)
+
+    fshift = -0.01558898374 # fres fit just above minus fres from sim 
+
+    fund_wins = np.array([[25, *[10]*4, 0], [50, *[60]*4, 20]]).T
+    plot_fres_vs_X(sim_fnames, wins=fund_wins, show_fits=False, fmt='gx', fshift=fshift)
+
+    second_wins = np.array([[70, 70, 75, 80, 90], [85, 90, 95, 100, 105]]).T
+    plot_fres_vs_X(sim_fnames[1:], wins=second_wins, show_fits=False, fmt='x', excluding_aligned=True, fshift=fshift)
+    
+    plt.show()
+
+    
