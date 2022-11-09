@@ -300,8 +300,13 @@ def calculate_form_factor(cdat, C_correction_factor=1.483):
     Cs = np.abs(cdat['ez'])**2 / (cdat['e2'] * cdat['v']) * C_correction_factor
 
     return Cs
-    
 
+def plot_align_hists(aligned_poss):
+    """
+    Plot histograms of each coordinate's aligned position, and quote variance (even though not exactly Gaussian).
+    """
+
+    print(aligned_poss.shape)
 
 def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
 
@@ -457,22 +462,45 @@ def plot_all_CvsX(all_eigen=True):
     ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize)
     ax1.grid()
 
-def plot_s11(freqs, spec, fit=False, start=0, stop=-1):
+def plot_s11(freqs, spec, fit=False, start=0, stop=-1, return_params=False, x_axis_index=False):
+    """
+    Plot an S11, like those read by load_spec or load_comsol_s11.
+
+    parameters:
+     - fit: Whether to also perform and plot a skewed Lorentzian fit.
+     - start/stop: The first and last indices that will be used in the fit
+     - return_params: Whether to return the popt and pcov from the Lorentzian fit. Returns None if fit==False
+     - x_axis_index: If true, the raw index values are used on the x axis, rather than frequency. Nice when looking for correct start/stop
+    """
 
     winfreqs = freqs[start:stop]
     winspec = spec[start:stop]
 
-    plt.plot(freqs, spec, 'k.')
+    plt.figure()
+
+    if x_axis_index:
+        plt.plot(spec, 'k.')
+    else:
+        plt.plot(freqs, spec, 'k.')
+
+    retval = None
     
     if fit:
         popt, pcov = ana.get_lorentz_fit(winfreqs, winspec, get_cov=True)
-        smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
-        plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
+        if return_params:
+            retval = popt, pcov
+        if x_axis_index:
+            x = np.arange(len(freqs))
+            winx = x[start:stop]
+            plt.plot(winx,ana.skewed_lorentzian(winfreqs, *popt), 'r--', label="fit")
+        else:
+            smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
+            plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
         print(f'fres * Hz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
         print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
-    
-    if fit:
         plt.legend()
+
+    return retval
 
 def align_yaxis(axes):
     """
@@ -528,8 +556,8 @@ def plot_NM_history(history, one_plot=False):
         
             plt.yticks(fontsize=ticksize)
             if coords[i] == "X" or coords[i] == "Y": # linear units
-                plt.plot(history[i], 'k')
-                plt.ylabel(f"{coords[i]} (mm)", fontsize=labelsize)
+                plt.plot(history[i]*1e3, 'k')
+                plt.ylabel(f"{coords[i]} ($\mu$m)", fontsize=labelsize)
             else: # angular
                 plt.plot(history[i]*3600, 'k')
                 plt.ylabel(f"{coords[i]} (arcsec)", fontsize=labelsize)
@@ -540,7 +568,7 @@ def plot_NM_history(history, one_plot=False):
         f, ax1 = plt.subplots(figsize=(17,15))
         ax2 = ax1.twinx()
         
-        ax1.set_ylabel("Position (mm)", fontsize=labelsize)
+        ax1.set_ylabel("Position ($\mu$m)", fontsize=labelsize)
         ax2.set_ylabel("Position (arcsec)", fontsize=labelsize)
         ax1.set_xlabel("Nelder-Mead Iteration", fontsize=labelsize)
         
@@ -551,7 +579,7 @@ def plot_NM_history(history, one_plot=False):
         for i in range(5):
 
             if coords[i] == "X" or coords[i] == "Y": # linear units
-                lines += ax1.plot(history[i], linestyles[i], label=coords[i], linewidth=5)
+                lines += ax1.plot(history[i]*1e3, linestyles[i], label=coords[i], linewidth=5)
             else:
                 lines += ax2.plot(history[i]*3600, linestyles[i], label=coords[i], linewidth=5)
 
@@ -728,13 +756,24 @@ if __name__=="__main__":
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
-    plot_NM_history(load_NM_history(NM_history_fname), one_plot=True)
+    #plot_NM_history(load_NM_history(NM_history_fname), one_plot=True)
     #plot_all_CvsX()
     #plot_all_Cvsf()
     #plot_field_map(load_field_map('20220831_132445'))
 
     #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
     #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
+
+    starts = [1500, 1250, 200, 4050, 1250, 2850]
+    stops = [4500, 4200, 2900, 5500, 2650, 3990]
+    
+    Qs = []
+    Qerrs = []
+    for i,fname in enumerate(S11_fit_fnames):
+        print(f"Working on {fname}")
+        popt, pcov = plot_s11(*load_spec(fname), fit=True, start=starts[i], stop=stops[i], x_axis_index=True, return_params=True)
+        Qs += [popt[-1]]
+        Qerrs += [np.sqrt(pcov[-1][-1])]
     
     plt.show()
 
