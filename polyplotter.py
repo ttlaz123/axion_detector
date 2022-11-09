@@ -541,17 +541,21 @@ def plot_mode_map(responses,freqs, start_pos, coord, start, end):
     coords = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
     init_param = start_pos[np.where(coords==coord)][0]
 
+    titlesize = 50
+    labelsize = 40
+    ticksize = 30
+
     freqs = freqs/10**9 # GHz
     plt.imshow(responses, extent=[freqs[0], freqs[-1], (end+init_param)*1e3, (start+init_param)*1e3], interpolation='none', aspect='auto', cmap='plasma_r')
     #plt.imshow(responses, interpolation='none', aspect='auto', cmap='plasma_r')
-    plt.title(f"Mode Map for {coord[-1]}", fontsize=30, y=1.01)
-    plt.xlabel('Frequency (GHz)', fontsize=20)
-    plt.ylabel(f'{coord[-1]} Position (um)', fontsize=20)
-    plt.xticks(fontsize=20)
-    plt.yticks(fontsize=20)
+    plt.title(f"Mode Map for {coord[-1]}", fontsize=titlesize, y=1.01)
+    plt.xlabel('$f$ (GHz)', fontsize=labelsize)
+    plt.ylabel(f'Wedge {coord[-1]} Position ($\mu$m)', fontsize=labelsize)
+    plt.xticks(fontsize=ticksize)
+    plt.yticks(fontsize=ticksize)
     cb = plt.colorbar()
-    cb.set_label("S11 (dB)", fontsize=20)
-    cb.ax.tick_params(labelsize=20)
+    cb.set_label("S11 (dB)", fontsize=labelsize)
+    cb.ax.tick_params(labelsize=ticksize)
 
 def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False, color='g', excluding_aligned=False, fshift=0, symmetrize=True):
     """
@@ -573,7 +577,7 @@ def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False
     freserrs = np.zeros(len(sim_fnames))
     positions = np.zeros(len(sim_fnames))
     for i, fname in enumerate(sim_fnames):
-        print(f"Working on {fname}...")
+        print(f"Working on {fname}")
         if i == 0 and not excluding_aligned:
             positions[i] = 0
         else:
@@ -642,11 +646,12 @@ if __name__=="__main__":
     start_pos = np.array([0]*6) # map taken when aligned, so centering coords there
 
     show_filted=False
+    disp_fwin = slice(500,1800)
     
-    disp = responses
+    disp = responses[:,disp_fwin]
     if show_filted:
-        disp = filted_resp
-    plot_mode_map(disp, freqs, start_pos, coord, start, end)
+        disp = filted_resp[:,disp_fwin]
+    plot_mode_map(disp, freqs[disp_fwin], start_pos, coord, start, end)
 
     fshift = -0.01523311329 # fres fit just above minus fres from sim
 
