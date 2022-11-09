@@ -473,35 +473,94 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=-1):
     
     if fit:
         plt.legend()
-    
 
-def plot_NM_history(history):
+def align_yaxis(axes):
+    """
+    Stolen shamelessly from StackOverflow
+    """
+    y_lims = np.array([ax.get_ylim() for ax in axes])
 
-    ticksize = 20
-    labelsize = 30
-    
-    plt.figure(figsize=(10,20))
+    # force 0 to appear on all axes, comment if don't need
+    y_lims[:, 0] = y_lims[:, 0].clip(None, 0)
+    y_lims[:, 1] = y_lims[:, 1].clip(0, None)
+
+    # normalize all axes
+    y_mags = (y_lims[:,1] - y_lims[:,0]).reshape(len(y_lims),1)
+    y_lims_normalized = y_lims / y_mags
+
+    # find combined range
+    y_new_lims_normalized = np.array([np.min(y_lims_normalized), np.max(y_lims_normalized)])
+
+    # denormalize combined range to get new axes
+    new_lims = y_new_lims_normalized * y_mags
+    for i, ax in enumerate(axes):
+        ax.set_ylim(new_lims[i])    
+        
+def plot_NM_history(history, one_plot=False):
+    """
+    parameters:
+     - one_plot: If true, plot all the coordinates on one plot. Otherwise use separate subplots.
+    """
+
+    ticksize = 30
+    labelsize = 40
+    legendsize = 40
+
     coords = ["X", "Y", "U", "V", "W"]
-    for i in range(5):
-        if i == 0:
-            ax1 = plt.subplot(511+i)
-            plt.title("Best Position at eapppch NM Step", fontsize=40)
-        else:
-            plt.subplot(511+i, sharex=ax1)
-            plt.subplots_adjust(hspace=0)
-        if i != 4:
-            plt.tick_params(anxis='x',which='both',bottom=False,top=False,labelbottom=False)
-        else:
-            plt.xlabel("Nelder-Mead Iteration Number", fontsize=labelsize)
-            plt.xticks(fontsize=ticksize)
 
-        plt.yticks(fontsize=ticksize)
-        if coords[i] == "X" or coords[i] == "Y": # linear units
-            plt.plot(history[i] - history[i][-1], 'k')
-            plt.ylabel(f"{coords[i]} (mm)", fontsize=labelsize)
-        else: # angular
-            plt.plot((history[i] - history[i][-1])*3600, 'k')
-            plt.ylabel(f"{coords[i]} (arcsec)", fontsize=labelsize)
+    history -= history[:,-1].reshape(5,-1)
+
+    if not one_plot:
+    
+        plt.figure(figsize=(10,20))
+        for i in range(5):
+            if i == 0:
+                ax1 = plt.subplot(511+i)
+                plt.title("Best Position at each NM Step", fontsize=40)
+            else:
+                plt.subplot(511+i, sharex=ax1)
+                plt.subplots_adjust(hspace=0)
+            if i != 4:
+                plt.tick_params(anxis='x',which='both',bottom=False,top=False,labelbottom=False)
+            else:
+                plt.xlabel("Nelder-Mead Iteration Number", fontsize=labelsize)
+                plt.xticks(fontsize=ticksize)
+        
+            plt.yticks(fontsize=ticksize)
+            if coords[i] == "X" or coords[i] == "Y": # linear units
+                plt.plot(history[i], 'k')
+                plt.ylabel(f"{coords[i]} (mm)", fontsize=labelsize)
+            else: # angular
+                plt.plot(history[i]*3600, 'k')
+                plt.ylabel(f"{coords[i]} (arcsec)", fontsize=labelsize)
+
+    else:
+        linestyles = ['b--', 'g--', 'g', 'b', 'r']
+        
+        f, ax1 = plt.subplots(figsize=(17,15))
+        ax2 = ax1.twinx()
+        
+        ax1.set_ylabel("Position (mm)", fontsize=labelsize)
+        ax2.set_ylabel("Position (arcsec)", fontsize=labelsize)
+        ax1.set_xlabel("Nelder-Mead Iteration", fontsize=labelsize)
+        
+        ax1.tick_params(axis='both', which='major', labelsize=ticksize)
+        ax2.tick_params(axis='both', which='major', labelsize=ticksize)
+
+        lines = []
+        for i in range(5):
+
+            if coords[i] == "X" or coords[i] == "Y": # linear units
+                lines += ax1.plot(history[i], linestyles[i], label=coords[i], linewidth=5)
+            else:
+                lines += ax2.plot(history[i]*3600, linestyles[i], label=coords[i], linewidth=5)
+
+        align_yaxis((ax1, ax2))
+        ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize, loc=4)
+        
+
+        
+            
 
 def plot_field_map(deltas, plot_E=True, mirror_rear=True, readjust_for_negatives=False):
     """
@@ -609,24 +668,17 @@ def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False
     if symmetrize:
         plt.scatter(fress+fshift, -positions, color=color, s=15, linewidths=5)
 
-if __name__=="__main__":
+def plot_first_three_modes_comparison(show_filted=False):
+    """
+    Plot an experimental mode map with X displacement, then overplot the simulated prediction of the resonant frequencies of the first three modes.
+    Data & sims taken at 75.19 mm.
 
-    S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
-    Zscan_fname = "20221010_172745_Z_scan/20221010_172745_Z_scan"
-
-    NM_history_fname = "20221011_102950_NM_history.npy"
+    parameters:
+     - show_filted: Whether to plot the fft filted mode map (if True) or the raw mode map.
+    """
 
     map_fname = "2022-10-13-18-25-14_3.291211567346X-0.5641939352805Y10.00045313989Z-0.09095016416645U0.5974875796197V0.9704551575534W-0.05i0.05fdX.npy"
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
-
-    #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
-    #plot_NM_history(load_NM_history(NM_history_fname))
-    #plot_all_CvsX()
-    #plot_all_Cvsf()
-    #plot_field_map(load_field_map('20220831_132445'))
-
-    #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
-    #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
 
     freqs, responses, start_pos, coord, start, end = load_mode_map(map_fname)
 
@@ -644,8 +696,7 @@ if __name__=="__main__":
     #plt.plot(smoothf, ana.skewed_lorentzian(smoothf, *popt), 'r--')
     
     start_pos = np.array([0]*6) # map taken when aligned, so centering coords there
-
-    show_filted=False
+    
     disp_fwin = slice(500,1800)
     
     disp = responses[:,disp_fwin]
@@ -663,6 +714,27 @@ if __name__=="__main__":
 
     third_wins = np.array([[103, 159, 145, 145, 140, 130], [113, 172, 176, 176, 170, 160]]).T
     plot_fres_vs_X(sim_fnames, wins=third_wins, show_fits=False, color='yellow', fshift=fshift)
+    
+
+if __name__=="__main__":
+
+    S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
+    Zscan_fname = "20221010_172745_Z_scan/20221010_172745_Z_scan"
+
+    #NM_history_fname = "20221011_102950_NM_history.npy"
+    NM_history_fname = "20221011_124231_NM_history.npy"
+
+    map_fname = "2022-10-13-18-25-14_3.291211567346X-0.5641939352805Y10.00045313989Z-0.09095016416645U0.5974875796197V0.9704551575534W-0.05i0.05fdX.npy"
+    sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
+
+    #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
+    plot_NM_history(load_NM_history(NM_history_fname), one_plot=True)
+    #plot_all_CvsX()
+    #plot_all_Cvsf()
+    #plot_field_map(load_field_map('20220831_132445'))
+
+    #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
+    #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
     
     plt.show()
 
