@@ -553,7 +553,7 @@ def plot_mode_map(responses,freqs, start_pos, coord, start, end):
     cb.set_label("S11 (dB)", fontsize=20)
     cb.ax.tick_params(labelsize=20)
 
-def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False, fmt='gx', excluding_aligned=False, fshift=0):
+def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False, color='g', excluding_aligned=False, fshift=0, symmetrize=True):
     """
     Plot misalignment position of the wedge vs. fres's found by fitting to the s11 in sim_fnames.
     Call this after plot_mode_map to overplot them seamlessly!
@@ -563,12 +563,11 @@ def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False
      - sim_fnames: list of names of simulated s11's. The first fname should be the aligned position. Should have {number}d{coord} in the other filenames to let this know the position of the wedge.
      - wins (sim_fnames.size, 2): A list of start and stop windows for the fitting. By default the full span is used.
      - show_fits: Whether to plot the fits. Good for checking the fits. Must be False to overplot well with plot_mode_map of course.
-     - fmt: format of data points in the final plot (as you would pass to plt.errorbar)
+     - color: color of data points in the final plot (as you would pass to plt.scatter)
      - excluding_aligned: Whether the first file is the aligned position file or not. If True, the function will look for a position in the filename of even the first file.
      - fshift: amount to add to the frequency of each point in the final plot. Corrects for construction error when overplotting with plot_mode_map
+     - symmetrize: Whether to plot minus positions as well (no new info since cavity is symmetric)
     """
-
-    print("[0-9]*{coord.lower()}")
 
     fress = np.zeros(len(sim_fnames))
     freserrs = np.zeros(len(sim_fnames))
@@ -599,9 +598,12 @@ def plot_fres_vs_X(sim_fnames, wins=np.array([[0]*6, [-1]*6]).T, show_fits=False
             plt.figure()
             plt.plot(xs, wide_spec, 'k.')
             plt.plot(smooth_xs, ana.skewed_lorentzian(smooth_fs, *popt), 'r--', label="fit")
-            plt.show() # ensure you're fitting well
+    if show_fits:
+        plt.show() # ensure you're fitting well
     
-    plt.errorbar(fress+fshift, positions, xerr=freserrs, fmt=fmt, capsize=8, markersize=15)
+    plt.scatter(fress+fshift, positions, color=color, s=15, linewidths=5)
+    if symmetrize:
+        plt.scatter(fress+fshift, -positions, color=color, s=15, linewidths=5)
 
 if __name__=="__main__":
 
@@ -628,29 +630,34 @@ if __name__=="__main__":
 
     filted_resp = ana.fft_cable_ref_filter(responses, harmon=harmon)
 
-    middle_spec = filted_resp[len(responses)//2+1]
+    middle_spec = filted_resp[len(responses)//2]
     mode_map_aligned_win = slice(1000,1070)
     popt = ana.get_lorentz_fit(freqs[mode_map_aligned_win], middle_spec[mode_map_aligned_win])
     fres = popt[-2]*1e-9
 
-    plt.plot(freqs, middle_spec, 'k.')
-    smoothf = np.linspace(min(freqs[mode_map_aligned_win]), max(freqs[mode_map_aligned_win]), 1000)
-    plt.plot(smoothf, ana.skewed_lorentzian(smoothf, *popt), 'r--')
-
-    plt.show()
-    
-    plt.plot(fres, 0, 'o')
+    #plt.plot(freqs, middle_spec, 'k.')
+    #smoothf = np.linspace(min(freqs[mode_map_aligned_win]), max(freqs[mode_map_aligned_win]), 1000)
+    #plt.plot(smoothf, ana.skewed_lorentzian(smoothf, *popt), 'r--')
     
     start_pos = np.array([0]*6) # map taken when aligned, so centering coords there
-    plot_mode_map(filted_resp, freqs, start_pos, coord, start, end)
 
-    fshift = -0.01558898374 # fres fit just above minus fres from sim 
+    show_filted=False
+    
+    disp = responses
+    if show_filted:
+        disp = filted_resp
+    plot_mode_map(disp, freqs, start_pos, coord, start, end)
+
+    fshift = -0.01523311329 # fres fit just above minus fres from sim
 
     fund_wins = np.array([[25, *[10]*4, 0], [50, *[60]*4, 20]]).T
-    plot_fres_vs_X(sim_fnames, wins=fund_wins, show_fits=False, fmt='gx', fshift=fshift)
+    plot_fres_vs_X(sim_fnames, wins=fund_wins, show_fits=False, color='g', fshift=fshift)
 
     second_wins = np.array([[70, 70, 75, 80, 90], [85, 90, 95, 100, 105]]).T
-    plot_fres_vs_X(sim_fnames[1:], wins=second_wins, show_fits=False, fmt='x', excluding_aligned=True, fshift=fshift)
+    plot_fres_vs_X(sim_fnames[1:], wins=second_wins, show_fits=False, color='r', excluding_aligned=True, fshift=fshift)
+
+    third_wins = np.array([[103, 159, 145, 145, 140, 130], [113, 172, 176, 176, 170, 160]]).T
+    plot_fres_vs_X(sim_fnames, wins=third_wins, show_fits=False, color='yellow', fshift=fshift)
     
     plt.show()
 
