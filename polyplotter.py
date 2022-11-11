@@ -23,7 +23,7 @@ dir_comsol_s11 = "/home/tdyson/coding/axion_detector/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
 dir_align_hists = "/home/tdyson/coding/axion_detector/autoalign_hist_data/"
 
-def load_align_hists(fname, keep_fails=False):
+def load_align_hist(fname, keep_fails=False):
     """
     load autoalign histogram data.
     parameters: 
@@ -52,7 +52,7 @@ def load_align_hists(fname, keep_fails=False):
     aligned_freqs = din[:,12]
     aligned_freqs_err = din[:,13]
 
-    print(f"loaded {dir_aligned_hists}/{fname} with {init_poss.shape[0]} aligns")
+    print(f"loaded {dir_align_hists}/{fname} with {init_poss.shape[0]} aligns")
 
     # if the run ended early there will be zeros
     end_inds = np.where(aligned_freqs == 0)[0]
@@ -301,12 +301,74 @@ def calculate_form_factor(cdat, C_correction_factor=1.483):
 
     return Cs
 
-def plot_align_hists(aligned_poss):
+def calculate_form_factor_distribution(form_factors, displacements, aligned_poss):
+    """
+    Calculates form factor distributions by interpolating C(X) from simulated data and plugging in aligned position distribution.
+
+    parameters:
+     - form_factors (6): aligned form factor, then degraded form factor when wedge moved by displacements[i] in the coords[i] direction.
+     - displacements (6): distance in mm or deg. that the wedge was misaligned in the corresponding axis to produce the form factor in form_factors[i]
+     - aligned_poss (N, 6): as produced by load_align_hist().
+    """
+    pass
+    
+
+def plot_align_hists(aligned_poss, return_stats=False):
     """
     Plot histograms of each coordinate's aligned position, and quote variance (even though not exactly Gaussian).
+
+    parameters:
+     - return_stats: If True, returns a (6,3) array of (mean, median, std) for each coord
     """
 
-    print(aligned_poss.shape)
+    retval = None
+    if return_stats:
+        retval = np.zeros((6,3))
+
+    coords = ["X", "Y", "Z", "U", "V", "W"]
+
+    for i, aligned_pos in enumerate(aligned_poss.T):
+
+        plt.figure()
+        plt.title(f"Aligned Position of the Wedge in the {coords[i]} Axis")
+        plt.ylabel("Count")
+        if coords[i] == "X" or coords[i] == "Y" or coords[i] == "Z":
+            scale = 1e3
+            plt.xlabel("Position ($\mu$m)")
+        else:
+            scale = 3.6e3
+            plt.xlabel("Position (arcseconds)")
+            
+        plt.hist((aligned_pos-np.mean(aligned_pos))*scale, bins=15, color='k')
+
+        if return_stats:
+            retval[i] = [np.mean(aligned_pos), np.median(aligned_pos), np.std(aligned_pos)]
+
+    return retval
+
+def plot_align_init_corrs(init_poss, aligned_poss):
+    """
+    Plot the correlations between each aligned position of the wedge in each coord and its initial position as a scatter.
+    """
+
+    plt.figure()
+    coords = ['X', 'Y', 'Z', 'U', 'V', 'W']
+    n = np.arange(init_poss.shape[0])
+    #ind = 88
+    for i,coord in enumerate(coords):
+        plt.subplot(231+i)
+        plt.scatter(init_poss[:,i], aligned_poss[:,i], c=n)
+        #plt.scatter(init_poss[ind,i], aligned_poss[ind,i], c='red')
+        plt.title(f"Alignment Scatter in {coord}")
+        plt.ylabel("Aligned Position (hexa coords)")
+        plt.xlabel("Initial Position (hexa coords)")
+
+def plot_align_xcorrs(aligned_poss):
+    """
+    Plot the correlations between each aligned position of the wedge in each coord and each other as a scatter.
+    """
+
+    pass
 
 def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
 
@@ -742,7 +804,21 @@ def plot_first_three_modes_comparison(show_filted=False):
 
     third_wins = np.array([[103, 159, 145, 145, 140, 130], [113, 172, 176, 176, 170, 160]]).T
     plot_fres_vs_X(sim_fnames, wins=third_wins, show_fits=False, color='yellow', fshift=fshift)
+
+def plot_experimental_Qs():
+
+    S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
+   
+    starts = [1500, 1250, 200, 4050, 1250, 2850]
+    stops = [4500, 4200, 2900, 5500, 2650, 3990]
     
+    Qs = []
+    Qerrs = []
+    for i,fname in enumerate(S11_fit_fnames):
+        print(f"Working on {fname}")
+        popt, pcov = plot_s11(*load_spec(fname), fit=True, start=starts[i], stop=stops[i], x_axis_index=True, return_params=True)
+        Qs += [popt[-1]]
+        Qerrs += [np.sqrt(pcov[-1][-1])]    
 
 if __name__=="__main__":
 
@@ -755,6 +831,8 @@ if __name__=="__main__":
     map_fname = "2022-10-13-18-25-14_3.291211567346X-0.5641939352805Y10.00045313989Z-0.09095016416645U0.5974875796197V0.9704551575534W-0.05i0.05fdX.npy"
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
+    align_hist_fname = "autoalign_hist_20220919_143431.npy"
+
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
     #plot_NM_history(load_NM_history(NM_history_fname), one_plot=True)
     #plot_all_CvsX()
@@ -763,18 +841,12 @@ if __name__=="__main__":
 
     #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
     #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
+    init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_align_hist(align_hist_fname)
+    
+    stats = plot_align_hists(aligned_poss, return_stats=True)
+    plot_align_init_corrs(init_poss, aligned_poss)
 
-    starts = [1500, 1250, 200, 4050, 1250, 2850]
-    stops = [4500, 4200, 2900, 5500, 2650, 3990]
-    
-    Qs = []
-    Qerrs = []
-    for i,fname in enumerate(S11_fit_fnames):
-        print(f"Working on {fname}")
-        popt, pcov = plot_s11(*load_spec(fname), fit=True, start=starts[i], stop=stops[i], x_axis_index=True, return_params=True)
-        Qs += [popt[-1]]
-        Qerrs += [np.sqrt(pcov[-1][-1])]
-    
+    print(stats[:,-1])
     plt.show()
 
     
