@@ -5,7 +5,7 @@ import json
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
 
-from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
+from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, mark_inset)
 
 import analyse as ana
 
@@ -307,10 +307,34 @@ def calculate_form_factor_distribution(form_factors, displacements, aligned_poss
 
     parameters:
      - form_factors (6): aligned form factor, then degraded form factor when wedge moved by displacements[i] in the coords[i] direction.
-     - displacements (6): distance in mm or deg. that the wedge was misaligned in the corresponding axis to produce the form factor in form_factors[i]
+     - displacements (6): distance in mm or deg. that the wedge was misaligned in the corresponding axis to produce the form factor in form_factors[i]. displacements[0] should be 0.
      - aligned_poss (N, 6): as produced by load_align_hist().
     """
-    pass
+    coords = ["X", "Y", "U", "V", "W"]
+
+    Cs_dist = np.zeros_like(aligned_poss)
+    for i in range(len(form_factors)-1):
+        positions = aligned_poss[:,i]
+        deltas = np.abs(positions - np.mean(positions)) # assumes true position is mean of aligned pos's.
+        slope = (form_factors[i+1] - form_factors[0]) / (displacements[i+1] - displacements[0])
+        intercept = form_factors[0]
+
+        Cs_dist[:,i] = deltas*slope + intercept
+
+        plt.figure()
+        plt.title(coords[i])
+        plt.hist(Cs_dist[:,i], color='k', bins=20)
+
+        print(coords[i])
+        print(np.mean(Cs_dist[:,i]))
+        print(np.std(Cs_dist[:,i]))
+
+    print('-'*30)
+    print(np.std(Cs_dist))
+    r = 0
+    for i in range(5):
+        r += np.std(Cs_dist[:,i])**2
+    print(np.sqrt(r))
     
 
 def plot_align_hists(aligned_poss, return_stats=False):
@@ -342,7 +366,7 @@ def plot_align_hists(aligned_poss, return_stats=False):
         plt.hist((aligned_pos-np.mean(aligned_pos))*scale, bins=15, color='k')
 
         if return_stats:
-            retval[i] = [np.mean(aligned_pos), np.median(aligned_pos), np.std(aligned_pos)]
+            retval[i] = [np.mean(aligned_pos*scale), np.median(aligned_pos*scale), np.std(aligned_pos*scale)]
 
     return retval
 
@@ -370,6 +394,59 @@ def plot_align_xcorrs(aligned_poss):
 
     pass
 
+def plot_align_corr_heatmap(init_poss, aligned_poss, skip_z=True):
+    """
+    Plot a heatmap of each dof's correlation R with each other coord. The diagonal is corr with initial position rather than simply 1.
+
+    parameters:
+     - skip_z: Whether to include the Z coordinate in the plot
+    """
+
+    textsize = 23
+    labelsize = 30
+
+    cmap = "Spectral_r"
+    textcolor = 'k'
+
+    if skip_z:
+        aligned_poss = np.delete(aligned_poss, 2, axis=1)
+        init_poss = np.delete(init_poss, 2, axis=1)
+    
+    xcorr = np.corrcoef(aligned_poss, rowvar=False)
+    
+    for i in range(xcorr.shape[1]):
+        xcorr[i,i] = np.corrcoef(aligned_poss[:,i], init_poss[:,i], rowvar=False)[0,1]
+
+    f, axs = plt.subplots(xcorr.shape[1], xcorr.shape[1], figsize=(8,8))
+
+    coords = ["X", "Y", "Z", "U", "V", "W"]
+    if skip_z:
+        del coords[2]
+
+    vmin = np.min(xcorr)
+    vmax = np.max(xcorr)
+
+    for i in range(axs.shape[0]):
+        for j in range(axs.shape[1]):
+            ax = axs[i][j]
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.spines['bottom'].set_visible(False)
+            ax.spines['left'].set_visible(False)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            if i >= j:
+                ax.imshow([[xcorr[i][j]]], vmin=vmin, vmax=vmax, aspect='auto', cmap=cmap)
+                ax.text(0, 0, np.round(xcorr[i][j],3), ha='center', va='center', color=textcolor, fontsize=textsize)
+                
+                if i == axs.shape[0]-1:
+                    ax.set_xlabel(coords[j], fontsize=labelsize)
+                if j == 0:
+                    ax.set_ylabel(coords[i], fontsize=labelsize)
+
+    plt.subplots_adjust(wspace=0, hspace=0)
+
+    
 def plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=True):
 
     Zfreqs, Zspecs, Zstart_pos, Z_map_poss = load_Z_scan(Zscan_fname)
@@ -647,11 +724,7 @@ def plot_NM_history(history, one_plot=False):
 
         align_yaxis((ax1, ax2))
         ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize, loc=4)
-        
-
-        
             
-
 def plot_field_map(deltas, plot_E=True, mirror_rear=True, readjust_for_negatives=False):
     """
     plots field mapping data obtained from the disk perturbation technique
@@ -682,9 +755,12 @@ def plot_field_map(deltas, plot_E=True, mirror_rear=True, readjust_for_negatives
         plt.imshow(maps[i], aspect='auto', interpolation='none', cmap='Spectral_r')
         plt.colorbar(label='$\\lvert\\textbf{E}(\\textbf{x})\\rvert$ (Arbitrary Units)$')
 
-def plot_mode_map(responses,freqs, start_pos, coord, start, end):
+def plot_mode_map(responses,freqs, start_pos, coord, start, end, cmap='plasma_r'):
     """
     Makes a plot from what load_mode_map gives you.
+
+    parameters:
+     - cmap: The cmap to use for the mode map
     """
 
     coords = np.array(['dX', 'dY', 'dZ', 'dU', 'dV', 'dW'])
@@ -695,9 +771,9 @@ def plot_mode_map(responses,freqs, start_pos, coord, start, end):
     ticksize = 30
 
     freqs = freqs/10**9 # GHz
-    plt.imshow(responses, extent=[freqs[0], freqs[-1], (end+init_param)*1e3, (start+init_param)*1e3], interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], (end+init_param)*1e3, (start+init_param)*1e3], interpolation='none', aspect='auto', cmap=cmap)
     #plt.imshow(responses, interpolation='none', aspect='auto', cmap='plasma_r')
-    plt.title(f"Mode Map for {coord[-1]}", fontsize=titlesize, y=1.01)
+    #plt.title(f"Mode Map for {coord[-1]}", fontsize=titlesize, y=1.01)
     plt.xlabel('$f$ (GHz)', fontsize=labelsize)
     plt.ylabel(f'Wedge {coord[-1]} Position ($\mu$m)', fontsize=labelsize)
     plt.xticks(fontsize=ticksize)
@@ -767,6 +843,8 @@ def plot_first_three_modes_comparison(show_filted=False):
      - show_filted: Whether to plot the fft filted mode map (if True) or the raw mode map.
     """
 
+    plt.figure(figsize=(13,10))
+
     map_fname = "2022-10-13-18-25-14_3.291211567346X-0.5641939352805Y10.00045313989Z-0.09095016416645U0.5974875796197V0.9704551575534W-0.05i0.05fdX.npy"
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
@@ -792,18 +870,20 @@ def plot_first_three_modes_comparison(show_filted=False):
     disp = responses[:,disp_fwin]
     if show_filted:
         disp = filted_resp[:,disp_fwin]
-    plot_mode_map(disp, freqs[disp_fwin], start_pos, coord, start, end)
+    plot_mode_map(disp, freqs[disp_fwin], start_pos, coord, start, end, cmap='YlOrRd')
 
     fshift = -0.01523311329 # fres fit just above minus fres from sim
 
+    dot_c = 'w'
+
     fund_wins = np.array([[25, *[10]*4, 0], [50, *[60]*4, 20]]).T
-    plot_fres_vs_X(sim_fnames, wins=fund_wins, show_fits=False, color='g', fshift=fshift)
+    plot_fres_vs_X(sim_fnames, wins=fund_wins, show_fits=False, color=dot_c, fshift=fshift)
 
     second_wins = np.array([[70, 70, 75, 80, 90], [85, 90, 95, 100, 105]]).T
-    plot_fres_vs_X(sim_fnames[1:], wins=second_wins, show_fits=False, color='r', excluding_aligned=True, fshift=fshift)
+    plot_fres_vs_X(sim_fnames[1:], wins=second_wins, show_fits=False, color=dot_c, excluding_aligned=True, fshift=fshift)
 
     third_wins = np.array([[103, 159, 145, 145, 140, 130], [113, 172, 176, 176, 170, 160]]).T
-    plot_fres_vs_X(sim_fnames, wins=third_wins, show_fits=False, color='yellow', fshift=fshift)
+    plot_fres_vs_X(sim_fnames, wins=third_wins, show_fits=False, color=dot_c, fshift=fshift)
 
 def plot_experimental_Qs():
 
@@ -843,10 +923,24 @@ if __name__=="__main__":
     #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
     init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_align_hist(align_hist_fname)
     
-    stats = plot_align_hists(aligned_poss, return_stats=True)
-    plot_align_init_corrs(init_poss, aligned_poss)
+    #stats = plot_align_hists(aligned_poss, return_stats=True)
+    #plot_align_corr_heatmap(init_poss, aligned_poss)
 
-    print(stats[:,-1])
+    #plot_first_three_modes_comparison()
+
+    displacements = [0, 5, 30, 6, 3, 3]
+    fname_coords = ['x', 'y', 'v', 'u', 'w']
+    fname_units = ['um', 'um', 'arcmin', 'arcmin', 'arcmin']
+    form_factors = []
+    for i,d in enumerate(displacements):
+        if i == 0:
+            cdat = load_comsol_integrations("aligned_form_factor_eigen.txt")
+        else:
+            cdat = load_comsol_integrations(f"d{fname_coords[i-1]}{displacements[i]}{fname_units[i-1]}_form_factor_eigen.txt")
+        Cs = calculate_form_factor(cdat)
+        form_factors += [np.max(Cs)]
+
+    calculate_form_factor_distribution(form_factors, displacements, aligned_poss)
     plt.show()
 
     
