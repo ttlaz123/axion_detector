@@ -701,7 +701,7 @@ def pos_list_2_dict(pos_list):
 
     return pos_dict
 
-def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, do_filter=False, plot=False, save=True):
+def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, fit_win=100, navg=1, delay=0.4, do_filter=False, plot=False, save=True):
     """
     autoalign using nelder mead
     ONLY use if it's close to aligned, and the VNA is focused on one resonance.
@@ -711,6 +711,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     limits is the margin for movement given for each parameter (no Z), from the starting position.
     max_iters is sraightforward
     navg is number of VNA responses to take and average before fitting to lorentz
+    delay is number of seconds to wait at each NM evaluation, usually to allow the wedge to move & the VNA to average
     fit_win is the number of points to fit a lorentzian to in the spectrum, looking left and right of the minimum. see analyse.find_fundamental_freqs
     do_filter is whether or not to fft filter out the cable reflections (or attempt to)
     """
@@ -719,7 +720,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
     freqs = auto.na.get_pna_freq()
     Z_pos = start_pos[2]
 
-    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg, do_filter=do_filter)
+    this_NMeval = partial(auto.NMeval, Z_pos=Z_pos, freqs=freqs, fit_win=fit_win, navg=navg, delay=delay, do_filter=do_filter)
     start_pos_no_z = np.delete(start_pos, 2)
     bounds = [(start_pos_no_z[i] - limits[i], start_pos_no_z[i] + limits[i]) for i in range(len(limits))]
 
@@ -1225,7 +1226,7 @@ def main():
     Z_poss = np.linspace(90, 30, 200)
     #pos_z_scan(auto, Z_poss, plot=True, save=True)
 
-    #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, plot=True, do_filter=True)
+    autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=True, do_filter=False)
     #read_spectrum(auto, plot=True, save=True, complex=False)
     #read_spectrum(auto, plot=True, save=True, complex=True)
 
@@ -1269,10 +1270,10 @@ def main():
     exit()
     '''
 
-    #autoalign(auto, ['dX', 'dY', 'dV', 'dW'], [0.005,0.005, 0.005,0.005], coarse_ranges=np.array([0.1,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
+    #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.01,0.01,0.01,0.01,0.01], coarse_ranges=np.array([0.1,0.5,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     #webhook.send('Autoalign complete.')
     
-    
+    '''
     # scan all
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.05, -0.1, -0.05, -0.05, -0.05])
@@ -1280,8 +1281,8 @@ def main():
     ns = np.array([20]*5)
     incrs = (ends - starts)/ns
     
-    scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
-
+    scan_many(auto, coords, starts, ends, incrs, plot=True, save=False)
+    '''
     '''
     for i in range(5):
         autoalign(auto, ['dX', 'dV', 'dW'], [0.01,0.01,0.01], coarse_ranges=np.array([0.05,0.2,0.1]), fine_ranges=np.array([0.02,0.05,0.05]), search_orders=['fwd','fwd','rev'], plot_coarse=False, plot_fine=False, save=False)
