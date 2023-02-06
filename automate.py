@@ -1023,7 +1023,7 @@ def wide_z_scan(auto, zi, zf, N, align_count, plot=False, save=True):
 def pos_z_scan(auto, Z_poss, plot=False, save=True):
     """
     auto: Automate instance
-    Z_poss: array or positioner Z positions
+    Z_poss: array of positioner Z positions
     plot/save: whether to do so
 
     Makes a tuning map, scanning over given Z_poss (like a mode map but it's Z).
@@ -1041,12 +1041,8 @@ def pos_z_scan(auto, Z_poss, plot=False, save=True):
     for i,Z_pos in enumerate(Z_poss):
 
         auto.pos.absolute_move(Z_pos)
-
         responses[i] = auto.na.get_pna_response()
-
-    if plot:
-        plot_tuning(responses, freqs, hexa_position, 'Z', Z_poss[0], Z_poss[-1])
-
+    
     if save:
         fname = datetime.datetime.now().strftime("tuning_data\\%Y%m%d_%H%M%S_Z_scan")
 
@@ -1054,11 +1050,14 @@ def pos_z_scan(auto, Z_poss, plot=False, save=True):
         
         coord_names = ['X', 'Y', 'Z', 'U', 'V', 'W']
         metadata = dict(zip(coord_names, hexa_position))
-        metadata['Z_poss'] = Z_poss
-        metadata['freqs'] = freqs
+        metadata['Z_poss'] = list(Z_poss)
+        metadata['freqs'] = list(freqs)
 
         with open(f"{fname}.json", "w") as write_file:
             json.dump(metadata, write_file)
+
+    if plot:
+        plot_tuning(responses, freqs, hexa_position, 'dZ', Z_poss[0], Z_poss[-1])
 
 
 
@@ -1224,14 +1223,15 @@ def main():
         init_poss[:,i] = rng.uniform(low=min_poss[i], high=max_poss[i], size=N)
 
     Z_poss = np.linspace(90, 30, 200)
-    pos_z_scan(auto, Z_poss, plot=True, save=True)
+    #pos_z_scan(auto, Z_poss, plot=True, save=True)
 
-    #read_spectrum(auto, plot=True)
+    #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, plot=True, do_filter=True)
+    #read_spectrum(auto, plot=True, save=True, complex=False)
+    #read_spectrum(auto, plot=True, save=True, complex=True)
 
     #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
     #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
 
-    #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, plot=True, do_filter=True)
     #plt.show()
     #autoalign_fits(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-2, 1e-3, 1e-3], num_spectra=[100, 100, 50, 100, 100], ranges=np.array([0.01,0.1,0.2,0.03,0.03]), degs=[4,2,3,4,4], fit_win=100, plot=False)
     #autoalign_fits(auto, ['dY', 'dU', 'dV', 'dW'], [1e-3, 1e-3, 1e-3, 1e-4], num_spectra=[50, 50, 25, 20], ranges=np.array([0.1,0.2,0.05,0.02]), fit_win=200, plot=True)
@@ -1275,13 +1275,12 @@ def main():
     
     # scan all
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
-    starts = np.array([-0.1, -0.2, -0.1, -0.1, -0.1])
+    starts = np.array([-0.05, -0.1, -0.05, -0.05, -0.05])
     ends = -1*starts
-    ns = np.array([200]*5)
+    ns = np.array([20]*5)
     incrs = (ends - starts)/ns
     
-    #scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
-    
+    scan_many(auto, coords, starts, ends, incrs, plot=True, save=True)
 
     '''
     for i in range(5):
