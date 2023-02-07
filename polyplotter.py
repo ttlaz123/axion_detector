@@ -4,6 +4,8 @@ import re
 import json
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
+from scipy.interpolate import interp1d
+from scipy import stats
 from lmfit import Model
 
 from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, mark_inset)
@@ -1011,12 +1013,91 @@ def full_fit(freqs, s11):
     params['Q_0'].set(min=Q_min, max=Q_max)
     params['beta'].set(min=0, max=5)
     params['phi'].set(min=phi_offset-np.pi, max=phi_offset+np.pi)
+    params['delay'].set(min=0)
     params['A_mag'].set(min=-10, max=10)
     params['f_min'].set(value=fmin, vary=False)
 
     result = totalmodel.fit(s11, params, f=freqs)
+
     return result
+
+def func_sc_pow_reflected(f, fo, Q, del_y, C):
+    """
+    Taken from code for ADMX sidecar
+    """
+
+    if del_y>C: return 0 ## Temp fix
+    return -(fo/(2*Q))**2*del_y/((f-fo)**2+(fo/(2*Q))**2)+C
+
+def sidecar_fit_reflection(freqs, s11):
+    """
+    Code adapted from ADMX for the sidecar cavity reflection fit
+    """
+
+    s11_mag = np.abs(s11)
+    s11_mag2 = s11_mag**2
+    s11_phase = np.unwrap(np.angle(s11))
+
+    # guess initial parameters
     
+    # f0
+    f0_ind = np.argmin(s11_mag2)
+    f0_guess = freqs[f0_ind]
+    # normalization factor
+    filt_pcnt = 0.33
+    s11_filtered = stats.trim1(s11_mag2, filt_pcnt, tail='left')
+    C_guess = np.median(s11_filtered)
+    # depth (positive)
+    dy_guess = C_guess - np.min(s11_mag2)
+    # Q
+    left_s11_mag2 = s11_mag2[:f0_ind]
+    ind_fwhm = np.argmin(np.abs(left_s11_mag2 - (C_guess-dy_guess/2)))
+    f1 = freqs[ind_fwhm]
+    del_f = 2*(f0_guess-f1)
+    Q_guess = f0_guess/del_f
+
+    po_guesses = (f0_guess, Q_guess, dy_guess, C_guess)
+
+    # fit power
+    P_popt, P_pcov = curve_fit(func_sc_pow_reflected, freqs, s11_mag2, p0=po_guesses)
+    # they have sigma=s11_mag basically, which I'm not sure I understand
+
+    f_0_fit, Q_fit, dy_fit, C_fit = P_popt
+
+    # Now we do a bunch of fitting and interpolating of the phase to find beta.
+    # "Deconvolving the line path"
+    # gamma is equivalent to s11
+    g_cav_mag = s11_mag*np.sqrt(1/C_fit)
+
+    interp_phase = interp1d(freqs, s11_phase, kind='cubic')
+    inds = np.arange(len(freqs))
+    n = 10
+    ends_inds = (inds < n) + (inds-len(freqs) > -n)
+    f_ends = freqs[ends_inds]
+    phase_ends = s11_phase[ends_inds]
+    interp_phase_wo_notch = np.poly1d(np.polyfit(f_ends, phase_ends,1))
+    # doesn't that cause some problems, since the slopes are the same but offset, so looking at the ends doesn't give you the real background?
+    delay_phase = interp_phase_wo_notch(freqs)
+    g_cav_phase = interp_phase(freqs) - delay_phase
+
+    # magnitude at resonance
+    g_cav_mag_f0 = np.sqrt(func_sc_pow_reflected(f_0_fit, *P_popt) * 1/C_fit)
+
+    # phase at resonance
+    g_cav_interp_phase = interp1d(freqs, g_cav_phase, kind='cubic')
+    g_cav_phase_f0 = g_cav_interp_phase(f_0_fit)
+
+    ind = np.argmin(abs(freqs-f_0_fit)) # index closest to resonance
+    if sum(g_cav_phase[ind:ind+5]) < sum(g_cav_phase[ind-5:ind]):
+        sign_phase = 1
+    else:
+        sign_phase = -1
+
+    beta = (1+sign_phase*g_cav_mag_f0)/(1-sign_phase*g_cav_mag_f0)
+
+    print(f_0_fit, Q_fit, beta)
+
+    return P_popt, beta
         
 if __name__=="__main__":
 
@@ -1035,13 +1116,20 @@ if __name__=="__main__":
 
 
     spec = load_spec(spec_fname)
+    
     freqs = spec[0]
     s11 = spec[1]
+    popt, sc_beta = sidecar_fit_reflection(freqs,s11)
+
+    plt.figure()
+    plt.plot(freqs, np.abs(s11), 'k.')
+    plt.plot(freqs, func_sc_pow_reflected(freqs, *popt), 'r--')
+    
     results = full_fit(*spec)
 
     freqs_fine = np.linspace(freqs[0], freqs[-1],10000)
 
-    f1 = plt.gcf()
+    f1 = plt.figure()
     ax1 = f1.subplots()
     f2 = plt.figure()
     ax2 = f2.subplots()
