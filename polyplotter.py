@@ -4,6 +4,7 @@ import re
 import json
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
+from lmfit import Model
 
 from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, mark_inset)
 
@@ -214,6 +215,7 @@ def load_spec(fname, return_Z=False):
     fullname = f"{dir_tuning_data}/{fname}"
 
     freqs, spec = np.load(fullname)
+    freqs = np.real(freqs) # both are saved as complex, don't want that.
 
     if return_Z:
         numbers = re.split('[^0-9-.]', fname)
@@ -423,8 +425,8 @@ def plot_align_corr_heatmap(init_poss, aligned_poss, skip_z=True):
     if skip_z:
         del coords[2]
 
-    vmin = np.min(xcorr)
-    vmax = np.max(xcorr)
+    vmin = 0
+    vmax = np.max(np.abs(xcorr))
 
     for i in range(axs.shape[0]):
         for j in range(axs.shape[1]):
@@ -436,7 +438,7 @@ def plot_align_corr_heatmap(init_poss, aligned_poss, skip_z=True):
             ax.set_xticks([])
             ax.set_yticks([])
             if i >= j:
-                ax.imshow([[xcorr[i][j]]], vmin=vmin, vmax=vmax, aspect='auto', cmap=cmap)
+                ax.imshow([[np.abs(xcorr[i][j])]], vmin=vmin, vmax=vmax, aspect='auto', cmap=cmap)
                 ax.text(0, 0, np.round(xcorr[i][j],3), ha='center', va='center', color=textcolor, fontsize=textsize)
                 
                 if i == axs.shape[0]-1:
@@ -601,7 +603,7 @@ def plot_all_CvsX(all_eigen=True):
     ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize)
     ax1.grid()
 
-def plot_s11(freqs, spec, fit=False, start=0, stop=-1, return_params=False, x_axis_index=False):
+def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_axis_index=False):
     """
     Plot an S11, like those read by load_spec or load_comsol_s11.
 
@@ -614,6 +616,9 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=-1, return_params=False, x_ax
 
     winfreqs = freqs[start:stop]
     winspec = spec[start:stop]
+
+    print(freqs)
+    print(winfreqs)
 
     plt.figure()
 
@@ -635,7 +640,7 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=-1, return_params=False, x_ax
         else:
             smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
             plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
-        print(f'fres * Hz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
+        print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
         print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
         plt.legend()
 
@@ -898,9 +903,124 @@ def plot_experimental_Qs():
         print(f"Working on {fname}")
         popt, pcov = plot_s11(*load_spec(fname), fit=True, start=starts[i], stop=stops[i], x_axis_index=True, return_params=True)
         Qs += [popt[-1]]
-        Qerrs += [np.sqrt(pcov[-1][-1])]    
+        Qerrs += [np.sqrt(pcov[-1][-1])]
 
+
+def plot_all_C_dists():
+    displacements = [0, 5, 30, 6, 3, 3]
+    fname_coords = ['x', 'y', 'v', 'u', 'w']
+    fname_units = ['um', 'um', 'arcmin', 'arcmin', 'arcmin']
+    form_factors = []
+    for i,d in enumerate(displacements):
+        if i == 0:
+            cdat = load_comsol_integrations("aligned_form_factor_eigen.txt")
+        else:
+            cdat = load_comsol_integrations(f"d{fname_coords[i-1]}{displacements[i]}{fname_units[i-1]}_form_factor_eigen.txt")
+        Cs = calculate_form_factor(cdat)
+        form_factors += [np.max(Cs)]
+        if i == 0:
+            print(np.max(Cs))
+
+    calculate_form_factor_distribution(form_factors, displacements, aligned_poss)
+
+def plot_V_vs_fres():
+
+    labelsize=30
+
+    Vs = [2699.62002, 2680.23519, 2626.48753] # cm^3
+    fress = [7.576653, 7.52777, 7.39191] # GHz
+
+    ps = np.polyfit(fress, Vs, deg=1)
+
+    print(ps)
+
+    plt.plot(fress, np.polyval(ps, fress), 'r--', lw=3)
+    plt.plot(fress, Vs, 'k.', ms=12)
+
+    plt.ylabel("Volume (cm$^3$)", fontsize=labelsize)
+    plt.xlabel("Resonant Frequency (GHz)", fontsize=labelsize)
+
+    plt.xticks(fontsize=labelsize)
+    plt.yticks(fontsize=labelsize)
+
+def linear_resonator(f, f_0, Q_0, beta):
+    num = (beta - 1 - (2j*Q_0*(f-f_0)/f_0))
+    den = (beta + 1 + (2j*Q_0*(f-f_0)/f_0))
+    return num/den 
+
+def cable_delay(f, delay, phi, f_min):
+
+    return np.exp(1j * (-2 * np.pi * (f-f_min) * delay + phi))
+
+def general_cable(f, delay, phi, f_min, A_mag, A_slope):
+
+    phase_term = cable_delay(f, delay, phi, f_min)
+    magnitude_term = ((f-f_min)*A_slope + 1) * A_mag
+    return magnitude_term*phase_term
+
+def resonator_cable(f, f_0, Q_0, beta, delay, phi, f_min, A_mag, A_slope):
+
+    resonator_term = linear_resonator(f, f_0, Q_0, beta)
+    cable_term = general_cable(f, delay, phi, f_min, A_mag, A_slope)
+    return cable_term*resonator_term
+
+def full_fit(freqs, s11):
+    """
+    Fits a full complex resonator model to get everything we want. 
+    Based on https://github.com/simonsobs/sodetlib/blob/master/scripts/resonator_model.py
+    which seems to expect s21 measurements, so I fit equation (13) in https://arxiv.org/pdf/2010.06183.pdf
+    That function has 1 fewer parameter than the other one, though...
+    I'll figure out how they're equivalent later
+
+    Fitting functions defined above
+    """
+
+    argmin_s11 = np.abs(s11).argmin()
+    fmin = np.min(freqs)
+    fmax = np.max(freqs)
+    f_0_guess = freqs[argmin_s11]
+    Q_min = 0.1 * (f_0_guess / (fmax - fmin))
+    delta_f = np.diff(freqs)
+    min_delta_f = delta_f[delta_f > 0].min()
+    Q_max = f_0_guess / min_delta_f
+    Q_guess = np.sqrt(Q_min * Q_max)
+    Q_guess = 5e3
+    beta_guess = 0.5 # I have no idea
+    A_slope, A_offset = np.polyfit(freqs - fmin, np.abs(s11), 1)
+    A_mag = A_offset
+    #A_mag = -0.33
+    A_mag_slope = A_slope/A_mag
+    #A_mag_slope=3e-8
+    phi_slope, phi_offset = np.polyfit(freqs - fmin, np.unwrap(np.angle(s11)), 1)
+    delay = -phi_slope/ (2*np.pi)
+    
+    totalmodel = Model(resonator_cable)
+    params = totalmodel.make_params(f0=f_0_guess,
+                                    Q_0=Q_guess,
+                                    beta=beta_guess,
+                                    delay=delay,
+                                    phi=phi_offset,
+                                    f_min=fmin,
+                                    A_mag=A_mag,
+                                    A_slope=A_mag_slope)
+
+    f_range = 1e3
+    #params['f_0'].set(min=f_0_guess-f_range, max=f_0_guess+f_range)
+    params['f_0'].set(min=fmin, max=fmax)
+    Q_min, Q_max = 1e3, 1e4
+    params['Q_0'].set(min=Q_min, max=Q_max)
+    params['beta'].set(min=0, max=5)
+    params['phi'].set(min=phi_offset-np.pi, max=phi_offset+np.pi)
+    params['A_mag'].set(min=-10, max=10)
+    params['f_min'].set(value=fmin, vary=False)
+
+    result = totalmodel.fit(s11, params, f=freqs)
+    return result
+    
+        
 if __name__=="__main__":
+
+    spec_fname = "2023-02-06-15-49-43_zoomed_NoneZ.npy"
 
     S11_fit_fnames = ['2022-10-12-17-50-02_zoomed_24Z.npy', '2022-10-12-14-56-10_zoomed_30Z.npy', '2022-10-11-10-33-07_zoomed_50Z.npy', '2022-10-06-14-25-41_zoomed_70Z.npy', '2022-10-10-15-11-46_zoomed_90Z.npy', '2022-10-12-14-47-41_zoomed_92Z.npy']
     Zscan_fname = "20221010_172745_Z_scan/20221010_172745_Z_scan"
@@ -913,34 +1033,52 @@ if __name__=="__main__":
 
     align_hist_fname = "autoalign_hist_20220919_143431.npy"
 
+
+    spec = load_spec(spec_fname)
+    freqs = spec[0]
+    s11 = spec[1]
+    results = full_fit(*spec)
+
+    freqs_fine = np.linspace(freqs[0], freqs[-1],10000)
+
+    f1 = plt.gcf()
+    ax1 = f1.subplots()
+    f2 = plt.figure()
+    ax2 = f2.subplots()
+
+    ax1.plot(freqs, np.abs(s11), 'k.')
+    ax1.plot(freqs_fine, np.abs(results.eval(f=freqs_fine)), '--')
+    
+    ax2.plot(freqs, np.unwrap(np.angle(s11)), 'k.')
+    ax2.plot(freqs_fine, np.unwrap(np.angle(results.eval(f=freqs_fine))), '--')
+        
+    results.params.pretty_print()
+
+    plt.show()
+   
+    
+
+    exit()
+    
+    
+
     #plot_Zscan_with_fit(Zscan_fname, S11_fit_fnames, show_fits=False)
     #plot_NM_history(load_NM_history(NM_history_fname), one_plot=True)
     #plot_all_CvsX()
     #plot_all_Cvsf()
     #plot_field_map(load_field_map('20220831_132445'))
 
-    #plot_s11(*load_comsol_s11('20221104_Al_70z_S11_hires.txt'), fit=True)
+    #plot_s11(*load_comsol_s11('20221118_Al_90z_S11_hires.txt'), fit=True, start=28, stop=-23)
     #plot_s11(*load_spec("2022-10-06-14-25-41_zoomed_70Z.npy"), fit=True, start=4000, stop=-600)
     init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_align_hist(align_hist_fname)
     
     #stats = plot_align_hists(aligned_poss, return_stats=True)
-    #plot_align_corr_heatmap(init_poss, aligned_poss)
+    plot_align_corr_heatmap(init_poss, aligned_poss)
 
     #plot_first_three_modes_comparison()
 
-    displacements = [0, 5, 30, 6, 3, 3]
-    fname_coords = ['x', 'y', 'v', 'u', 'w']
-    fname_units = ['um', 'um', 'arcmin', 'arcmin', 'arcmin']
-    form_factors = []
-    for i,d in enumerate(displacements):
-        if i == 0:
-            cdat = load_comsol_integrations("aligned_form_factor_eigen.txt")
-        else:
-            cdat = load_comsol_integrations(f"d{fname_coords[i-1]}{displacements[i]}{fname_units[i-1]}_form_factor_eigen.txt")
-        Cs = calculate_form_factor(cdat)
-        form_factors += [np.max(Cs)]
-
-    calculate_form_factor_distribution(form_factors, displacements, aligned_poss)
+    #plot_V_vs_fres()
+    
     plt.show()
 
     
