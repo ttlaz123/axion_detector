@@ -201,9 +201,11 @@ def load_NM_history(fname):
     # yeah this is a np.load wrapper but needed to document
     return history
 
-def load_spec(fname, return_Z=False):
+def load_spec(fname, return_Z=False, full_path=False):
     """
     Loads a single S11 spectrum whose filename looks like 'YYYY-MM-DD-HH-MM-SS_tag_##Z.npy'.
+
+     - full_path: If false, assumes the data is in ./tuning_data. If true, you get to specify the entire relative or absolute path.
     
     returns:
     [Z,] freqs, spec
@@ -213,8 +215,11 @@ def load_spec(fname, return_Z=False):
      - freqs: (freq_npts) Frequency bins when the spectrum was taken.
      - spec: (freq_npts) S11 spectrum from the VNA. Can be complex.
     """
-    
-    fullname = f"{dir_tuning_data}/{fname}"
+
+    if not full_path:
+        fullname = f"{dir_tuning_data}/{fname}"
+    else:
+        fullname = fname
 
     freqs, spec = np.load(fullname)
     freqs = np.real(freqs) # both are saved as complex, don't want that.
@@ -610,41 +615,81 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_
     Plot an S11, like those read by load_spec or load_comsol_s11.
 
     parameters:
-     - fit: Whether to also perform and plot a skewed Lorentzian fit.
+     - fit: Whether to also perform and plot a fit to the resonator. If magnitude only, fits a skewed Lorentzian fit. If complex, fits a complex Loretzian with cable term taken from an SO repo. 
      - start/stop: The first and last indices that will be used in the fit
      - return_params: Whether to return the popt and pcov from the Lorentzian fit. Returns None if fit==False
      - x_axis_index: If true, the raw index values are used on the x axis, rather than frequency. Nice when looking for correct start/stop
+
+    returns
     """
 
+    f1 = plt.figure()
+    ax1 = f1.subplots()
+
+    iscomplex = False
+    if spec.dtype == complex:
+        iscomplex = True
+        mag = np.abs(spec)
+        phase = np.unwrap(np.angle(spec))
+        f2 = plt.figure()
+        ax2 = f2.subplots()
+        f3 = plt.figure()
+        ax3 = f3.subplots()
+
+    
     winfreqs = freqs[start:stop]
     winspec = spec[start:stop]
 
     print(freqs)
     print(winfreqs)
-
-    plt.figure()
-
-    if x_axis_index:
-        plt.plot(spec, 'k.')
+    
+    if not iscomplex:
+        if x_axis_index:
+            ax1.plot(spec, 'k.')
+        else:
+            ax1.plot(freqs, spec, 'k.')
     else:
-        plt.plot(freqs, spec, 'k.')
+        if x_axis_index:
+            ax1.plot(mag, 'k.')
+            ax2.plot(phase, 'k.')
+        else:
+            ax1.plot(freqs, mag, 'k.')
+            ax2.plot(freqs, phase, 'k.')
+        ax3.plot(np.real(spec), np.imag(spec), 'k.')
 
     retval = None
     
     if fit:
-        popt, pcov = ana.get_lorentz_fit(winfreqs, winspec, get_cov=True)
-        if return_params:
-            retval = popt, pcov
-        if x_axis_index:
-            x = np.arange(len(freqs))
-            winx = x[start:stop]
-            plt.plot(winx,ana.skewed_lorentzian(winfreqs, *popt), 'r--', label="fit")
+        if not iscomplex:
+            popt, pcov = ana.get_lorentz_fit(winfreqs, winspec, get_cov=True)
+            if return_params:
+                retval = popt, pcov
+            if x_axis_index:
+                x = np.arange(len(freqs))
+                winx = x[start:stop]
+                ax1.plot(winx,ana.skewed_lorentzian(winfreqs, *popt), 'r--', label="fit")
+            else:
+                smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
+                ax1.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
+            print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
+            print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
+            plt.legend()
+
         else:
-            smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
-            plt.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
-        print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
-        print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
-        plt.legend()
+            retval = full_fit(winfreqs, winspec, restrict_f0=True)
+            if x_axis_index:
+                x = np.arange(len(freqs))
+                winx = x[start:stop]
+                ax1.plot(winx, np.abs(retval.eval(f=winfreqs)), 'r--')
+                ax2.plot(winx, np.unwrap(np.angle(retval.eval(f=winfreqs))), 'r--')
+            else:
+                freqs_fine = np.linspace(winfreqs[0], winfreqs[-1],10000)
+                ax1.plot(freqs_fine, np.abs(retval.eval(f=freqs_fine)), 'r--')
+                ax2.plot(freqs_fine, np.unwrap(np.angle(retval.eval(f=freqs_fine))), 'r--')
+            ax3.plot(np.real(retval.eval(f=winfreqs)), np.imag(retval.eval(f=winfreqs)), 'r--')
+            print(f'fres * GHz^-1: {retval.params["f_0"].value}')
+            print(f'Q: {retval.params["Q_0"].value}')
+            print(f'beta: {retval.params["beta"].value}')
 
     return retval
 
@@ -966,7 +1011,23 @@ def resonator_cable(f, f_0, Q_0, beta, delay, phi, f_min, A_mag, A_slope):
     cable_term = general_cable(f, delay, phi, f_min, A_mag, A_slope)
     return cable_term*resonator_term
 
-def full_fit(freqs, s11):
+def prototype_resonator_cable(f, f_0, Q_0, beta, delay, phi, f_min, A_mag, A_slope, B, C, D, E, F):
+    """
+    Adapted from the SO resonator cable fitting function, but trying to account for the odd
+    periodic structure we see in the prototype single-wedge reflection data by adding a 
+    linear fit to the magnitude and a quadratic to the phase, fitting only on the ends
+    """
+
+    res_cab_term = resonator_cable(f, f_0, Q_0, beta, delay, phi, f_min, A_mag, A_slope)
+    rc_A = np.abs(res_cab_term)
+    rc_ph = np.unwrap(np.angle(res_cab_term))
+
+    rc_A += B + C*(f-f_min)
+    rc_phase += D + E*(f-f_min) + F*(f-f_min)**2
+
+    return rc_A * np.exp(1j*rc_phase)
+
+def full_fit(freqs, s11, restrict_f0=False):
     """
     Fits a full complex resonator model to get everything we want. 
     Based on https://github.com/simonsobs/sodetlib/blob/master/scripts/resonator_model.py
@@ -1006,9 +1067,11 @@ def full_fit(freqs, s11):
                                     A_mag=A_mag,
                                     A_slope=A_mag_slope)
 
-    f_range = 1e3
-    #params['f_0'].set(min=f_0_guess-f_range, max=f_0_guess+f_range)
-    params['f_0'].set(min=fmin, max=fmax)
+    f_range = 1e2
+    if restrict_f0:
+        params['f_0'].set(min=f_0_guess-f_range, max=f_0_guess+f_range)
+    else:
+        params['f_0'].set(min=fmin, max=fmax)
     Q_min, Q_max = 1e3, 1e4
     params['Q_0'].set(min=Q_min, max=Q_max)
     params['beta'].set(min=0, max=5)
@@ -1116,9 +1179,15 @@ if __name__=="__main__":
 
 
     spec = load_spec(spec_fname)
+
+    margin = 1
+    freqs = spec[0][margin:-margin]
+    s11 = spec[1][margin:-margin]
+
+    plot_s11(freqs, s11, fit=True)
+    plt.show()
+    exit()
     
-    freqs = spec[0]
-    s11 = spec[1]
     popt, sc_beta = sidecar_fit_reflection(freqs,s11)
 
     plt.figure()
@@ -1126,6 +1195,7 @@ if __name__=="__main__":
     plt.plot(freqs, func_sc_pow_reflected(freqs, *popt), 'r--')
     
     results = full_fit(*spec)
+    results.params.pretty_print()
 
     freqs_fine = np.linspace(freqs[0], freqs[-1],10000)
 
@@ -1139,8 +1209,25 @@ if __name__=="__main__":
     
     ax2.plot(freqs, np.unwrap(np.angle(s11)), 'k.')
     ax2.plot(freqs_fine, np.unwrap(np.angle(results.eval(f=freqs_fine))), '--')
+
+    f3 = plt.figure()
+    ax3 = f3.subplots()
+    f4 = plt.figure()
+    ax4 = f4.subplots()
+    
+    f0_fit = results.params['f_0'].value
+    r = 5e4
+    for f0 in np.linspace(f0_fit-r, f0_fit+r, 5):
         
-    results.params.pretty_print()
+        results.params['f_0'].set(min=-np.inf, max=np.inf, value=f0)
+        ax3.plot(freqs, np.abs(s11) - np.abs(results.eval(f=freqs)), '.', label=f"f0={f0}")
+        ax4.plot(freqs, np.unwrap(np.angle(s11)) - np.unwrap(np.angle(results.eval(f=freqs))), '.', label=f"f0={f0}")
+    results.params['f_0'].set(min=-np.inf, max=np.inf, value=f0_fit)
+    ax3.plot(freqs, np.abs(s11) - np.abs(results.eval(f=freqs)), '.', label=f"f0={f0}")
+    ax4.plot(freqs, np.unwrap(np.angle(s11)) - np.unwrap(np.angle(results.eval(f=freqs))), '.', label=f"f0={f0}")
+    ax3.plot(freqs, 0*freqs, 'k--')
+    ax4.plot(freqs, 0*freqs, 'k--')
+    plt.legend()
 
     plt.show()
    
