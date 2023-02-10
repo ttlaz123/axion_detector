@@ -16,6 +16,10 @@ ey = cdat['ey']
 e2 = cdat['e2']
 v = cdat['v']
 
+C = np.abs(ez)**2 / (e2*v)
+print(max(C))
+
+plt.figure()
 plt.title("Fraction of E field in Z direction, norm calculated in COMSOL")
 plt.plot(fs, (np.abs(ex)/cdat['norme_auto']), label="X")
 plt.plot(fs, (np.abs(ey)/cdat['norme_auto']), label="Y")

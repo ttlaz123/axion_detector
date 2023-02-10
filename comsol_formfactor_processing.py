@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import font_manager
 from scipy.interpolate import interp1d
 
 # Script to read form factor data from COMSOL
@@ -40,7 +41,9 @@ def read_comsol_integrations(fname, colnames=['freq', 'ez', 'e2', 'v']):
     return results
     
 
-def formfactor_evolution(DoF, data_path, plot=True):
+def formfactor_evolution(DoF, data_path, plot=True, plotCvsfres=False):
+
+    C_correction_factor = 1.483
 
     if DoF == "X" or DoF == 'x':
         distances = [5, 10, 15, 20, 30] # this is for figuring out fnames
@@ -79,7 +82,7 @@ def formfactor_evolution(DoF, data_path, plot=True):
 
         cdat = read_comsol_integrations(fname)
     
-        Cs = np.abs(cdat['ez'])**2 / (cdat['e2'] * cdat['v']**2)
+        Cs = np.abs(cdat['ez'])**2 / (cdat['e2'] * cdat['v']) * C_correction_factor
     
         f = cdat['freq']
         freq2C = interp1d(f, Cs)
@@ -108,9 +111,19 @@ def formfactor_evolution(DoF, data_path, plot=True):
         plt.title(f"Frequency of Best Form Factor Mode, {DoF} Direction")
         plt.xlabel(f"{DoF} Displacement ({hexa_unit})")
         plt.ylabel("Frequency (GHz)")
-        plt.show()
+
+    if plotCvsfres:
+        plt.figure()
+        plt.title(f"Resonant Frequency Change with Form Factor Change, {DoF} Perturbation")
+        plt.ylabel("Resonant Frequency $f_{res}/\mathrm{GHz}$")
+        plt.xlabel("Form Factor $C$")
+        plt.plot(Cmaxs, freqs, 'k')
+        
+
+    
 
 if __name__=="__main__":
     data_path = "form_factor_data"
-    DoF = 'x'
-    formfactor_evolution(DoF, data_path, plot=True)
+    DoF = 'X'
+    formfactor_evolution(DoF, data_path, plot=True, plotCvsfres=True)
+    plt.show()
