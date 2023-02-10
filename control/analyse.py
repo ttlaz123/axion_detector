@@ -2,8 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-import tuning_plotter
-
 from scipy.signal import find_peaks
 from scipy.optimize import curve_fit
 from uncertainties import ufloat
@@ -416,8 +414,9 @@ def get_turning_point(responses, coord, start_pos, start, end, incr, search_rang
     turning_point = -p[1]/(2*p[0])
 
     if plot:
+        # doesn't work, tuning_plotter has moved
         plt.figure()
-        tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
+        #tuning_plotter.plot_tuning(responses, freqs, start_pos, coord, start, end)
         plt.plot(y, x, 'r.')
         plt.plot(np.polyval(p,x), x, 'b--')
         plt.plot(freqs*1e-9,turning_point*np.ones_like(freqs), 'b')

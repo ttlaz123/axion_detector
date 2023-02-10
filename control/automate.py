@@ -746,7 +746,7 @@ def autoalign_NM(auto, xatol, fatol, limits, init_simplex=None, max_iters=None, 
             plt.ylabel(coords[i])
     
     if save:
-        fname = datetime.datetime.now().strftime("NM_histories\\%Y%m%d_%H%M%S_NM_history")
+        fname = datetime.datetime.now().strftime("../data/NM_histories/%Y%m%d_%H%M%S_NM_history")
         
         history = np.array(res['allvecs']).T # (coord, niters)
         np.save(fname, history)
@@ -1158,7 +1158,7 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
             plt.plot(freqs, np.log10(np.abs(response)))
             plt.figure()
             plt.title("PHASE")
-            plt.plot(freqs, np.angle(response))
+            plt.plot(freqs, np.unwrap(np.angle(response)))
         else:
             plt.plot(freqs,response, label=Zpos)
         plt.legend()
@@ -1226,9 +1226,9 @@ def main():
     Z_poss = np.linspace(90, 30, 200)
     #pos_z_scan(auto, Z_poss, plot=True, save=True)
 
-    autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=True, do_filter=False)
-    #read_spectrum(auto, plot=True, save=True, complex=False)
-    #read_spectrum(auto, plot=True, save=True, complex=True)
+    #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=True, do_filter=False)
+    
+    read_spectrum(auto, plot=True, save=True, complex=True)
 
     #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
     #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
@@ -1278,7 +1278,7 @@ def main():
     coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
     starts = np.array([-0.05, -0.1, -0.05, -0.05, -0.05])
     ends = -1*starts
-    ns = np.array([20]*5)
+    ns = np.array([10]*5)
     incrs = (ends - starts)/ns
     
     scan_many(auto, coords, starts, ends, incrs, plot=True, save=False)
