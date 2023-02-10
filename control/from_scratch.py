@@ -5,6 +5,18 @@ import argparse
 
 import automate, hexachamber, positioner, na_tracer
 
+"""
+A script to align the wedge from an arbitrary position.
+
+This script needs to be updated to use NM
+
+The 'from nothing' alignment process is basically:
+    1. Align roughly by eye
+    1.5. Adjust Y until the lower frequency resonances are clear. Some may appear out of 'nowhere'!
+    2. Make a coarse mode map, and notice any asymmetries. wonky V maps usually mean W needs to be adjusted.
+    3. Focus on the fundamental and run a NM alignment.
+"""
+
 if __name__=="__main__":
 
     parser = argparse.ArgumentParser()
