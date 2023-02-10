@@ -2,9 +2,6 @@
 Chao-Lin's concentric cavities
 
 # Description of Scripts (by directory)
-## Analysis Scripts
-
-Empty for now, but will contain scripts for science analysis. They might live in another repo one day.
 
 ## Characterization Analysis
 
