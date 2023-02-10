@@ -140,9 +140,9 @@ def plot_TDR(fname, calibration=0.53):
 
 if __name__ == '__main__':
 
-    plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
-    data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
-    #data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
+    #plot_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\plots\\"
+    #data_dir = "C:\\Users\\FTS\\source\\repos\\axion_detector\\tuning_data\\"
+    data_dir = "/home/tdyson/coding/axion_detector/tuning_data/"
 
     parser = argparse.ArgumentParser()
 
@@ -159,7 +159,7 @@ if __name__ == '__main__':
     for i, fname in enumerate(fnames):
 
         freqs, responses, start_pos, coord, start, end = load_tuning(fname)
-        cal_data = np.load(f"{data_dir}{cal_file}")[1:]
+        #cal_data = np.load(f"{data_dir}{cal_file}")[1:]
 
         if i > 0:
             plt.figure()

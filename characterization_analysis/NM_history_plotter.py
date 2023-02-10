@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-fname = "NM_histories\\20221010_115331_NM_history.npy"
+fname = "../NM_histories/20221010_115331_NM_history.npy"
 
 history = np.load(fname) # (coord, nstep)
 
