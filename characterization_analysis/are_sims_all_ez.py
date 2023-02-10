@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from comsol_formfactor_processing import read_comsol_integrations
 
-data_path="form_factor_data"
+data_path="../data/form_factor_data"
 fname = "aligned_all_components_other_norms_wf.txt"
 
 fullname = f"{data_path}/{fname}"
