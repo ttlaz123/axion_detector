@@ -22,7 +22,7 @@ dir_field_maps = "../data/field_mapping_data/"
 # form factor according to COMSOL integrations
 dir_comsol_ints = "../data/form_factor_data/"
 # simulated S11 data from which to extract predicted Q
-dir_comsol_s11 = "../data/simulated_S11_data/"
+dir_comsol_s11 = "../../data/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
 dir_align_hists = "../data/autoalign_hist_data/"
 
@@ -165,7 +165,7 @@ def load_comsol_integrations(fname, colnames=['freq', 'ez', 'e2', 'v']):
     
     return results
 
-def load_comsol_s11(fname):
+def load_comsol_s11(fname, complex=False):
     """
     Loads S11 sweeps simulated by COMSOL
 
@@ -182,7 +182,14 @@ def load_comsol_s11(fname):
         
     dat = np.genfromtxt(fullname, skip_header=header)
 
-    return dat[:,0], dat[:,1]
+    if not complex:
+        return dat[:,0]*1e9, dat[:,1]
+    else:
+        # comsol saves in Re, Im, freq order
+        s11_re = dat[:,0]
+        s11_im = dat[:,1]
+        s11 = s11_re + 1j*s11_im
+        return dat[:,2]*1e9, s11
 
 def load_NM_history(fname):
     """
@@ -639,9 +646,6 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_
     
     winfreqs = freqs[start:stop]
     winspec = spec[start:stop]
-
-    print(freqs)
-    print(winfreqs)
     
     if not iscomplex:
         if x_axis_index:
@@ -1069,6 +1073,7 @@ def full_fit(freqs, s11, restrict_f0=False):
 
     f_range = 1e2
     if restrict_f0:
+        print(f_0_guess)
         params['f_0'].set(min=f_0_guess-f_range, max=f_0_guess+f_range)
     else:
         params['f_0'].set(min=fmin, max=fmax)
@@ -1080,6 +1085,8 @@ def full_fit(freqs, s11, restrict_f0=False):
     params['A_mag'].set(min=-10, max=10)
     params['f_min'].set(value=fmin, vary=False)
 
+    print(params)
+    
     result = totalmodel.fit(s11, params, f=freqs)
 
     return result
