@@ -680,7 +680,7 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_
             plt.legend()
 
         else:
-            retval = full_fit(winfreqs, winspec, restrict_f0=True)
+            retval = full_fit(winfreqs, winspec)
             if x_axis_index:
                 x = np.arange(len(freqs))
                 winx = x[start:stop]
@@ -997,7 +997,36 @@ def plot_V_vs_fres():
 def linear_resonator(f, f_0, Q_0, beta):
     num = (beta - 1 - (2j*Q_0*(f-f_0)/f_0))
     den = (beta + 1 + (2j*Q_0*(f-f_0)/f_0))
-    return num/den 
+    return num/den
+
+def linear_resonator_IQ_offset(f, f_0, Q_0, beta, dRe, dIm):
+    lin_res = linear_resonator(f, f_0, Q_0, beta)
+    Re = np.real(lin_res) + dRe
+    Im = np.imag(lin_res) + dIm
+    retval = Re + 1j*Im
+    return retval
+
+def linear_resonator_offset(f, f_0, Q_0, beta, dmag, dphase):
+    lin_res = linear_resonator(f, f_0, Q_0, beta)
+    mag = np.abs(lin_res) + dmag
+    phase = np.unwrap(np.angle(lin_res)) + dphase
+    retval = mag * np.exp(1j*phase)
+    return retval
+
+def linear_resonator_rotated(f, f_0, Q_0, beta, phi):
+    lin_res = linear_resonator(f, f_0, Q_0, beta)
+    eta_r = np.cos(phi)
+    eta_i = 1j*np.sin(phi)
+    retval = lin_res*(eta_r+eta_i)
+    # see https://arxiv.org/pdf/1108.3117.pdf for why * eta_r
+    return retval
+
+def linear_resonator_rotated_offset(f, f_0, Q_0, beta, phi, dRe, dIm):
+    rotated = linear_resonator_rotated(f, f_0, Q_0, beta, phi)
+    Re = np.real(rotated) + dRe
+    Im = np.imag(rotated) + dIm
+    retval = Re + 1j*Im
+    return retval
 
 def cable_delay(f, delay, phi, f_min):
 
