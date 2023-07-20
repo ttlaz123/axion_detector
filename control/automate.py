@@ -461,7 +461,7 @@ def plot_tuning(responses,freqs, start_pos, coord, start, end):
     init_param = start_pos[np.where(coords==coord)][0]
 
     freqs = freqs/10**9 # GHz
-    plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r')
+    plt.imshow(responses, extent=[freqs[0], freqs[-1], end+init_param, start+init_param], interpolation='none', aspect='auto', cmap='plasma_r', vmax=2)
     plt.xlabel('Frequency [GHz]')
     plt.ylabel(f'Tuning Parameter: {coord[-1]}')
     plt.colorbar()
@@ -1127,6 +1127,34 @@ def autoalign_histogram(auto, init_poss, autoalign_func, args, kwargs, fit_win=2
 
     print("FINISHED.")
 
+def measure_tuning_drift(auto, Z0, Zs):
+
+    init_freqs = np.zeros_like(Zs, dtype=float)
+    displaced_freqs = np.zeros_like(Zs, dtype=float)
+    for i, Z in enumerate(Zs):
+        input("Please zoom out VNA")
+        auto.pos.absolute_move(Z0)
+        input("Please center VNA on fundamental and span to ~10 MHz")
+        autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=False, do_filter=False)
+        freqs, response = read_spectrum(auto, save=False, complex=False)
+        init_freq = analyse.get_lorentz_fit(freqs, response)[4]
+        print(init_freq)
+        init_freqs[i] = init_freq*1e-9
+
+        input("Please zoom out VNA")
+
+        auto.pos.absolute_move(Z)
+        input("Please center VNA on fundamental and span to ~10 MHz")
+        autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=False, do_filter=False)
+        freqs, response = read_spectrum(auto, save=False, complex=False)
+        displaced_freq = analyse.get_lorentz_fit(freqs, response)[4]
+        print(displaced_freq)
+        displaced_freqs[i] = displaced_freq*1e-9
+
+    return init_freqs, displaced_freqs
+
+
+
 def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
 
     freqs = auto.na.get_pna_freq()
@@ -1172,6 +1200,7 @@ def read_spectrum(auto, harmon=None, save=True, plot=False, complex=False):
     return freqs, response
     
 def main():
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-i', '--hex_ip', default='192.168.254.85',
                     help='IP address to connect to the NewportXPS hexapod')
@@ -1205,7 +1234,7 @@ def main():
 
     #scan_one_abs(auto, "X", X_now-0.02, X_now+0.02, 0.001, delay=1, plot=True, save=False)
     #scan_one_antiskip(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
-    #scan_one(auto, "dX", -0.02, 0.02, 0.001, delay=0.2, plot=True, save=False)
+    #scan_one(auto, "dY", -0.1, 0.1, 0.01, plot=True, save=False)
     
     freq = na.get_pna_freq()
     _, harmon = analyse.auto_filter(freq, np.zeros(9), return_harmon=True)
@@ -1228,7 +1257,7 @@ def main():
 
     #autoalign_NM(auto, 1e-3, 1e5,  [0.01, 0.03, 0.03, 0.01, 0.01], max_iters=50, fit_win=100, delay=0.5, plot=True, do_filter=False)
     
-    read_spectrum(auto, plot=True, save=True, complex=True)
+    #read_spectrum(auto, plot=True, save=True, complex=True)
 
     #autoalign_histogram(auto, init_poss, autoalign_NM, [auto, 1e-3, 1e6, [0.02, 0.1, 0.2, 0.05, 0.02]], 
     #{'max_iters':150, 'fit_win':200, 'navg':10, 'plot':False}, fit_win=200, save_path=save_path)
@@ -1273,12 +1302,15 @@ def main():
     #autoalign(auto, ['dX', 'dY', 'dU', 'dV', 'dW'], [0.01,0.01,0.01,0.01,0.01], coarse_ranges=np.array([0.1,0.5,0.5,0.1,0.1]), fine_ranges=np.array([0.02,0.1,0.05,0.05]), search_orders=['fwd','rev','fwd','rev','fwd'], plot_coarse=True, plot_fine=False, skip_coarse=False)
     #webhook.send('Autoalign complete.')
     
-    '''
+    
     # scan all
-    coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
-    starts = np.array([-0.05, -0.1, -0.05, -0.05, -0.05])
+    '''
+    #coords = np.array(['dX', 'dY', 'dU', 'dV', 'dW'])
+    #starts = np.array([-0.05, -0.1, -0.05, -0.05, -0.05])
+    coords = np.array(['dX', 'dY', 'dV', 'dW'])
+    starts = np.array([-0.05, -0.05, -0.05, -0.05])
     ends = -1*starts
-    ns = np.array([10]*5)
+    ns = np.array([20]*4)
     incrs = (ends - starts)/ns
     
     scan_many(auto, coords, starts, ends, incrs, plot=True, save=False)
@@ -1303,6 +1335,26 @@ def main():
     #read_spectrum(auto, harmon=None, save=True, plot=True, complex=False)
 
     #wide_z_scan(auto, 0, 91.4 - 10.4, 20, 3, plot=True)
+
+    Z0 = 69.5
+    #Zs = [69.4, 69.3, 69.2, 69.1, 69, 68.5, 68, 67]
+    Zs = np.array([69])
+    dZs = Zs - Z0
+
+    init_fs, tuned_fs = measure_tuning_drift(auto, Z0, Zs)
+
+    print(init_fs, tuned_fs)
+
+    dfs = tuned_fs - init_fs
+
+    plt.figure()
+    plt.plot(dZs, dfs, 'k.')
+    plt.xlabel('dZ')
+    plt.ylabel('df')
+
+    plt.figure()
+    plt.plot(dZs, init_fs-init_fs[0], 'k.')
+    plt.plot(dZs, dZs*0, 'k--')
 
     #plt.legend()
     plt.show()
