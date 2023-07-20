@@ -269,7 +269,7 @@ def plot_trace(xs, ys, position, fit=None, title='Axion Cavity Resonance Scanner
 
 def main():
     
-    na = NetworkAnalyzer()
+    na = NetworkAnalyzer(name='GPIB::16::INSTR')
 
     #print(na.send_command(["SENS:FREQ:STAR?;STOP?"]))
     #print(na.device.query('CALC:PAR:CAT?'))

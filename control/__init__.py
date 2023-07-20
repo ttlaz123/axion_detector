@@ -1,0 +1,10 @@
+./mynewportxps
+./analyse.py
+./automate.py
+./fieldmap.py
+./from_scratch.py
+./hexachamber.py
+./manual.py
+./na_tracer.py
+./positioner.py
+./z_scan.py
