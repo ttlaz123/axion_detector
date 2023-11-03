@@ -12,17 +12,17 @@ from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, ma
 
 # where all the data lives (changes with machine)
 # all S11 data, be that mode maps or single spectra
-dir_tuning_data = "../data/tuning_data/"
+dir_tuning_data = "/home/tdyson/coding/axion_detector/data/tuning_data/"
 # NM algortihm's best parameter choice at each step
-dir_NM_histories = "../data/NM_histories/"
+dir_NM_histories = "/home/tdyson/coding/axion_detector/data/NM_histories/"
 # 2d field maps taken with the disk techinque
-dir_field_maps = "../data/field_mapping_data/"
+dir_field_maps = "/home/tdyson/coding/axion_detector/data/field_mapping_data/"
 # form factor according to COMSOL integrations
-dir_comsol_ints = "../data/form_factor_data/"
+dir_comsol_ints = "/home/tdyson/coding/axion_detector/data/form_factor_data/"
 # simulated S11 data from which to extract predicted Q
-dir_comsol_s11 = "../data/simulated_S11_data/"
+dir_comsol_s11 = "/home/tdyson/coding/axion_detector/data/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
-dir_align_hists = "../data/autoalign_hist_data/"
+dir_align_hists = "/home/tdyson/coding/axion_detector/data/autoalign_hist_data/"
 
 def load_align_hist(fname, keep_fails=False):
     """
