@@ -14,17 +14,17 @@ import analyse as ana
 
 # where all the data lives (changes with machine)
 # all S11 data, be that mode maps or single spectra
-dir_tuning_data = "../data/tuning_data/"
+dir_tuning_data = "../../data/tuning_data/"
 # NM algortihm's best parameter choice at each step
-dir_NM_histories = "../data/NM_histories/"
+dir_NM_histories = "../../data/NM_histories/"
 # 2d field maps taken with the disk techinque
-dir_field_maps = "../data/field_mapping_data/"
+dir_field_maps = "../../data/field_mapping_data/"
 # form factor according to COMSOL integrations
-dir_comsol_ints = "../data/form_factor_data/"
+dir_comsol_ints = "../../data/form_factor_data/"
 # simulated S11 data from which to extract predicted Q
 dir_comsol_s11 = "../../data/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
-dir_align_hists = "../data/autoalign_hist_data/"
+dir_align_hists = "../../data/autoalign_hist_data/"
 
 def load_align_hist(fname, keep_fails=False):
     """
@@ -326,12 +326,15 @@ def calculate_form_factor_distribution(form_factors, displacements, aligned_poss
      - displacements (6): distance in mm or deg. that the wedge was misaligned in the corresponding axis to produce the form factor in form_factors[i]. displacements[0] should be 0.
      - aligned_poss (N, 6): as produced by load_align_hist().
     """
-    coords = ["X", "Y", "U", "V", "W"]
+    coords = ["X", "Y", "Z", "U", "V", "W"]
 
     Cs_dist = np.zeros_like(aligned_poss)
-    for i in range(len(form_factors)-1):
+    for i in range(len(coords)):
+        if coords[i] == "Z":
+            continue
         positions = aligned_poss[:,i]
         deltas = np.abs(positions - np.mean(positions)) # assumes true position is mean of aligned pos's.
+        print(form_factors)
         slope = (form_factors[i+1] - form_factors[0]) / (displacements[i+1] - displacements[0])
         intercept = form_factors[0]
 
@@ -341,7 +344,9 @@ def calculate_form_factor_distribution(form_factors, displacements, aligned_poss
         plt.title(coords[i])
         plt.hist(Cs_dist[:,i], color='k', bins=20)
 
+
         print(coords[i])
+        print(np.std(positions))
         print(np.mean(Cs_dist[:,i]))
         print(np.std(Cs_dist[:,i]))
 
@@ -399,7 +404,7 @@ def plot_align_init_corrs(init_poss, aligned_poss):
         plt.subplot(231+i)
         plt.scatter(init_poss[:,i], aligned_poss[:,i], c=n)
         #plt.scatter(init_poss[ind,i], aligned_poss[ind,i], c='red')
-        plt.title(f"Alignment Scatter in {coord}")
+        plt.title(f"Alignment Scatter in {coord} (stdev. = {np.std(aligned_poss[:,i])})")
         plt.ylabel("Aligned Position (hexa coords)")
         plt.xlabel("Initial Position (hexa coords)")
 
@@ -957,12 +962,15 @@ def plot_experimental_Qs():
         Qerrs += [np.sqrt(pcov[-1][-1])]
 
 
-def plot_all_C_dists():
-    displacements = [0, 5, 30, 6, 3, 3]
-    fname_coords = ['x', 'y', 'v', 'u', 'w']
-    fname_units = ['um', 'um', 'arcmin', 'arcmin', 'arcmin']
+def plot_all_C_dists(aligned_poss):
+    displacements = [0, 5, 30, 0, 6, 3, 3]
+    fname_coords = ['x', 'y', 'z', 'v', 'u', 'w'] # need Z for things to line up
+    fname_units = ['um', 'um', 'null', 'arcmin', 'arcmin', 'arcmin']
     form_factors = []
     for i,d in enumerate(displacements):
+        if fname_coords[i-1] == 'z':
+            form_factors += [-1]
+            continue
         if i == 0:
             cdat = load_comsol_integrations("aligned_form_factor_eigen.txt")
         else:
@@ -1212,6 +1220,12 @@ if __name__=="__main__":
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
     align_hist_fname = "autoalign_hist_20220919_143431.npy"
+
+    init_poss, aligned_poss, aligned_freqs, aligned_freqs_err = load_align_hist(align_hist_fname)
+    plot_all_C_dists(aligned_poss)
+    plot_align_init_corrs(init_poss, aligned_poss)
+    plt.show()
+    exit()
 
 
     spec = load_spec(spec_fname)
