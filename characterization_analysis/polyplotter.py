@@ -10,6 +10,10 @@ from lmfit import Model
 
 from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, mark_inset)
 
+import sys, os
+
+sys.path.insert(0,'../control/')
+
 import analyse as ana
 
 # where all the data lives (changes with machine)
@@ -1212,6 +1216,9 @@ if __name__=="__main__":
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
     align_hist_fname = "autoalign_hist_20220919_143431.npy"
+
+    plot_all_CvsX()
+    exit()
 
 
     spec = load_spec(spec_fname)

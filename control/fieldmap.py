@@ -23,13 +23,14 @@ def main():
     parser.add_argument('-p', '--hex_password', help='Password to connect to the NewportXPS hexapod')
     args = parser.parse_args()
 
-    na = na_tracer.NetworkAnalyzer()
+    na = na_tracer.NetworkAnalyzer(name='GPIB0::16::INSTR', channel='CH1_S12_1')
 
     pos = None
     webhook = None
     hexa = automate.HexaChamber(host=args.hex_ip, username='Administrator', password=args.hex_password)
 
-    auto = automate.AutoScanner(hexa, pos, na, webhook)
+    #auto = automate.AutoScanner(hexa, pos, na, webhook)
+    auto = automate.AutoScanner(hexa, pos, na)
 
     # autoalign params
     coords = ['dX', 'dV', 'dW']

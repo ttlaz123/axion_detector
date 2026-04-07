@@ -11,11 +11,10 @@ import analyse as ana
 
 class NetworkAnalyzer:
 
-    def __init__(self, name=None):
+    def __init__(self, name=None,channel='CH1_S11_1'):
         self.name = name
         self.device = self.initialize_device()
-        self.choose_channel()
-
+        self.choose_channel(channel)
     def initialize_device(self, name=None):
         rm = pv.ResourceManager()
         if(name is not None):

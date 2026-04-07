@@ -994,6 +994,9 @@ def plot_V_vs_fres():
     plt.xticks(fontsize=labelsize)
     plt.yticks(fontsize=labelsize)
 
+def matt_linear_resonator(f, f_0, Q_0, beta):
+    return 1 - (beta / (1+beta)) * 1/(1+2j*Q_0/beta*(f-f_0)/f_0)
+
 def linear_resonator(f, f_0, Q_0, beta):
     num = (beta - 1 - (2j*Q_0*(f-f_0)/f_0))
     den = (beta + 1 + (2j*Q_0*(f-f_0)/f_0))
