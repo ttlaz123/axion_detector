@@ -10,19 +10,24 @@ from lmfit import Model
 
 from mpl_toolkits.axes_grid1.inset_locator import (inset_axes, InsetPosition, mark_inset)
 
+import sys, os
+sys.path.insert(0,'../control/')
+
+import analyse as ana
+
 # where all the data lives (changes with machine)
 # all S11 data, be that mode maps or single spectra
-dir_tuning_data = "/home/tdyson/coding/axion_detector/data/tuning_data/"
+dir_tuning_data = "../data/tuning_data/"
 # NM algortihm's best parameter choice at each step
-dir_NM_histories = "/home/tdyson/coding/axion_detector/data/NM_histories/"
+dir_NM_histories = "../data/NM_histories/"
 # 2d field maps taken with the disk techinque
-dir_field_maps = "/home/tdyson/coding/axion_detector/data/field_mapping_data/"
+dir_field_maps = "../data/field_mapping_data/"
 # form factor according to COMSOL integrations
-dir_comsol_ints = "/home/tdyson/coding/axion_detector/data/form_factor_data/"
+dir_comsol_ints = "../data/form_factor_data/"
 # simulated S11 data from which to extract predicted Q
-dir_comsol_s11 = "/home/tdyson/coding/axion_detector/data/simulated_S11_data/"
+dir_comsol_s11 = "../../data/simulated_S11_data/"
 # aligned positions of many autoalign attempts compiled into a histogrammable format
-dir_align_hists = "/home/tdyson/coding/axion_detector/data/autoalign_hist_data/"
+dir_align_hists = "../data/autoalign_hist_data/"
 
 def load_align_hist(fname, keep_fails=False):
     """
@@ -588,7 +593,7 @@ def plot_all_CvsX(all_eigen=True):
     legendsize = 40
     
     ax1.set_xlabel("Position ($\mu$m)", fontsize=fontsize)
-    ax2.set_xlabel("Position (arcsec)", fontsize=fontsize)
+    ax2.set_xlabel("Position (arcmin)", fontsize=fontsize)
     ax1.set_ylabel("$C$", fontsize=fontsize)
     
     ax1.tick_params(axis='both', which='major', labelsize=fontsize)
@@ -614,39 +619,6 @@ def plot_all_CvsX(all_eigen=True):
 
     ax1.legend(lines, [l.get_label() for l in lines], fontsize=legendsize)
     ax1.grid()
-
-
-def skewed_lorentzian(x,bkg,bkg_slp,skw,mintrans,res_f,Q):
-    term1 = bkg 
-    term2 = bkg_slp*(x-res_f)
-    numer = (mintrans+skw*(x-res_f))
-    denom = (1+4*Q**2*((x-res_f)/res_f)**2)
-    term3 = numer/denom
-    return term1 + term2 - term3
-
-def get_lorentz_fit(freqs, spec, get_cov=False):
-
-    # define the initial guesses
-    bkg = (spec[0]+spec[-1])/2
-    bkg_slp = (spec[-1]-spec[0])/(freqs[-1]-freqs[0])
-    skw = 0
-
-    mintrans = bkg-spec.min()
-    res_f = freqs[spec.argmin()]
-
-    Q = 1e4
-
-    low_bounds = [bkg/2,-1e-3,-1,0,freqs[0],1e2]
-    up_bounds = [bkg*2,1e-3,1,30,freqs[-1],1e5]
-
-    popt,pcov = curve_fit(skewed_lorentzian,freqs,spec,p0=[bkg,bkg_slp,skw,mintrans,res_f,Q],method='lm')
-
-    if get_cov:
-        retval = popt, pcov
-    else:
-        retval = popt
-
-    return retval
 
 def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_axis_index=False):
     """
@@ -696,16 +668,16 @@ def plot_s11(freqs, spec, fit=False, start=0, stop=None, return_params=False, x_
     
     if fit:
         if not iscomplex:
-            popt, pcov = get_lorentz_fit(winfreqs, winspec, get_cov=True)
+            popt, pcov = ana.get_lorentz_fit(winfreqs, winspec, get_cov=True)
             if return_params:
                 retval = popt, pcov
             if x_axis_index:
                 x = np.arange(len(freqs))
                 winx = x[start:stop]
-                ax1.plot(winx,skewed_lorentzian(winfreqs, *popt), 'r--', label="fit")
+                ax1.plot(winx,ana.skewed_lorentzian(winfreqs, *popt), 'r--', label="fit")
             else:
                 smooth_f = np.linspace(min(winfreqs), max(winfreqs), 1000)
-                ax1.plot(smooth_f, skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
+                ax1.plot(smooth_f, ana.skewed_lorentzian(smooth_f, *popt), 'r--', label="fit")
             print(f'fres * GHz^-1: {popt[-2]}+/-{pcov[-2][-2]**(1/2)}')
             print(f'Q: {popt[-1]}+/-{pcov[-1][-1]**(1/2)}')
             plt.legend()
@@ -1243,6 +1215,10 @@ if __name__=="__main__":
     sim_fnames = ["20221104_Al_75z_aligned_S11.txt"]+[f"20221104_Al_75z_dx{d}um_S11.txt" for d in [5, 10, 15, 20, 30]]
 
     align_hist_fname = "autoalign_hist_20220919_143431.npy"
+
+    plot_all_CvsX(all_eigen=True)
+    plt.show()
+    exit()
 
 
     spec = load_spec(spec_fname)
